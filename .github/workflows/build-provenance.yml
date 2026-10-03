@@ -1,0 +1,49 @@
+name: Build provenance
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  attest:
+    name: Build and attest stopwatch
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Package stopwatch site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
+          cp index.html dist/
+          cp README.md dist/
+          cp icon-192.png dist/
+          cp icon-512.png dist/
+          cp icon-maskable-512.png dist/
+          (
+            cd dist
+            zip -r ../stopwatch-site.zip .
+          )
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stopwatch-site
+          path: stopwatch-site.zip
+          if-no-files-found: error
+
+      - name: Generate build provenance
+        uses: actions/attest-build-provenance@v4.2.2
+        with:
+          subject-path: stopwatch-site.zip
