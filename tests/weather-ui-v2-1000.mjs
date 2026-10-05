@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 
 const ORIGIN='http://127.0.0.1:4173';
+const RUN_MARK='main-current-code';
 const FORECAST={
   current:{temperature_2m:18,apparent_temperature:17,relative_humidity_2m:61,weather_code:0,wind_speed_10m:4,time:'2026-10-05T18:00'},
   hourly:{time:Array.from({length:48},(_,i)=>'2026-10-05T'+String((18+i)%24).padStart(2,'0')+':00'),temperature_2m:Array(48).fill(18),weather_code:Array(48).fill(0),precipitation_probability:Array(48).fill(0)},
