@@ -75,7 +75,7 @@ try{
 }
 
 const report={ok:!failure,requested_operations:1000,completed_operations:completed,elapsed_ms:0,features:{edit_address:true,auto_manual_toggle:true,refresh_weather:true,zip_search:true},browser_errors:errors,failure,timestamp:new Date().toISOString()};
-await fs.writeFile('weather-test-report.json',JSON.stringify(report,null,2));
+await fs.writeFile('weather-test-report-latest.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report));
 await browser.close();
 if(failure)process.exit(1);
