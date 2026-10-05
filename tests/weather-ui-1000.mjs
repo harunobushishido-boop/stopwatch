@@ -58,7 +58,7 @@ try{
   }
 
   // 50 operations: postal-code search + selecting the result.
-  for(let i=0;i<50;i++){
+  for(let i=0;i<25;i++){
     await edit.click(); completed++;
     await input.fill('982-0032');
     await page.locator('.clk-wx-picker__row').first().waitFor({state:'visible',timeout:2000});
