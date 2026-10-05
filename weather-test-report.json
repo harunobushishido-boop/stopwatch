@@ -10,8 +10,9 @@
     "zip_search": true
   },
   "browser_errors": [
-    "pageerror: $(...).forEach is not a function"
+    "pageerror: $$$ is not defined",
+    "pageerror: Cannot access 'mode' before initialization"
   ],
   "failure": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('button.clk-controls__btn[aria-label=\"天気\"]')\n    - locator resolved to <button title=\"天気\" tabindex=\"-1\" type=\"button\" aria-label=\"天気\" aria-pressed=\"false\" class=\"clk-controls__btn\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    58 × waiting for element to be visible, enabled and stable\n       - element is not visible\n     - retrying click action\n       - waiting 500ms\n\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-1000.mjs:30:67",
-  "timestamp": "2026-10-05T10:01:18.229Z"
+  "timestamp": "2026-10-05T10:03:37.158Z"
 }
