@@ -342,7 +342,7 @@ panel.addEventListener('click',e=>{if(e.target.closest('.clk-chime-select__play'
 const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="sndSt"></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-s="vic">新記録</button><button data-s="pop">自動スタート</button><button data-s="se">タイマー終了</button></div>';
 $$('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
 const sndSt=()=>{$('#sndSt').textContent=ac&&ac.state==='running'?'音声：有効':'音声：ブロック中です。ページ内を一度クリックしてください'};sndSt();setInterval(sndSt,1000);
-{const cr=document.createElement('p');cr.className='clk-panel__footnote';cr.id='pcCredit';cr.style.textAlign='center';cr.textContent='作成者：宍戸晴信';panes[5].appendChild(cr)}
+{const cr=document.createElement('p');cr.className='clk-panel__footnote';cr.id='pcCredit';cr.style.textAlign='center';cr.textContent='制作者：宍戸陽信';panes[5].appendChild(cr)}
 tick();swSync();syncSw();
 })();
 </script><script>
@@ -479,13 +479,14 @@ try{
   }
 
   const bgInput=window.__clkBgApi?.bgInput;
-  if(bgInput)bgInput.accept='image/*,video/*';
-  const bgB=window.__clkBgApi?.bgB;
-  if(bgB&&bgInput&&!document.getElementById('ghBgPick')){
-    const b=document.createElement('button');b.id='ghBgPick';b.type='button';b.className='clk-timer-start';b.textContent='画像・動画を選ぶ';b.style.width='100%';b.onclick=()=>bgInput.click();
-    (bgB.querySelector('.clk-bg-hint')?.parentElement||bgB).appendChild(b);
+  if(bgInput){
+    bgInput.accept='image/*,video/*';
+    bgInput.style.display='block';
+    bgInput.style.width='100%';
+    bgInput.style.marginTop='10px';
+    bgInput.style.opacity='1';
+    bgInput.style.pointerEvents='auto';
   }
-
   document.querySelectorAll('button[aria-label="リピート"],button[aria-label="シャッフル"]').forEach(btn=>{
     if(btn.getAttribute('aria-label')==='リピート'&&!btn.dataset.a)btn.dataset.a='rep';
     if(btn.getAttribute('aria-label')==='シャッフル'&&!btn.dataset.a)btn.dataset.a='shuf';
@@ -495,41 +496,7 @@ try{
     const hint=document.createElement('p');hint.dataset.ghMusicHint='1';hint.className='clk-group__hint';hint.textContent='BGM・環境音だけの音量です。終了通知音の音量とは別に調節できます。';musicVol.after(hint);
   }
 
-  const installTimerExtras=()=>{
-    const g=[...document.querySelectorAll('.clk-panel__pane')].find(x=>x.querySelector('.clk-preset-grid')||x.querySelector('.clk-timer-list'));
-    if(!g)return;
-    const layout=[...g.querySelectorAll('.clk-group')].find(x=>x.querySelector('.clk-group__label')?.textContent.trim()==='レイアウト');
-    if(!layout||layout.querySelector('[data-gh-timer-design]'))return;
-    const box=document.createElement('div');box.className='clk-group';box.setAttribute('data-gh-timer-design','1');
-    box.innerHTML='<span class="clk-group__label">タイマーデザイン</span><p class="clk-group__hint">中央表示するタイマーの見た目を選べます。</p><div class="clk-segments" data-cols="2"><button type="button" class="clk-segment" data-gh-design="circle" aria-pressed="true">円形</button><button type="button" class="clk-segment" data-gh-design="digital" aria-pressed="false">デジタル</button></div>';
-    layout.after(box);
-    const apply=()=>{
-      const sizeInput=[...g.querySelectorAll('input[type="range"]')].find(x=>x.getAttribute('aria-label')==='大きさ');
-      const savedScale=Math.max(.7,Math.min(1.5,Number(localStorage.getItem('pctimerScale'))||1));
-      if(sizeInput){sizeInput.value=String(savedScale);const sv=sizeInput.closest('.clk-group')?.querySelector('.clk-size-value');if(sv)sv.textContent=Math.round(savedScale*100)+'%';}
-      shell.style.setProperty('--clk-timer-scale',String(savedScale));
-      const design=localStorage.getItem('pctimerDesign')||'circle';
-      const circle=document.querySelector('#stA .clk-timer-circle');
-      if(design==='digital'&&circle){
-        circle.style.display='none';
-        let d=document.getElementById('ghDigitalTimer');
-        if(!d){
-          d=document.createElement('div');d.id='ghDigitalTimer';d.className='clk-timer-circle';
-          d.innerHTML='<div class="clk-timer-circle__center"><span class="clk-timer-circle__label">タイマー</span><span class="clk-timer-circle__time">00:00</span><button type="button" class="clk-timer-circle__pause" aria-label="一時停止" title="一時停止"></button></div>';
-          const stage=document.querySelector('#stA');stage?.insertBefore(d,stage.querySelector('.clk-stage__cluster')||null);
-        }
-        const srcTime=circle.querySelector('.clk-timer-circle__time')?.textContent||'00:00';
-        const srcLabel=circle.querySelector('.clk-timer-circle__label')?.textContent||'タイマー';
-        const srcBtn=circle.querySelector('.clk-timer-circle__pause');
-        d.querySelector('.clk-timer-circle__time').textContent=srcTime;d.querySelector('.clk-timer-circle__label').textContent=srcLabel;
-        const db=d.querySelector('.clk-timer-circle__pause');if(db&&srcBtn){db.setAttribute('aria-label',srcBtn.getAttribute('aria-label')||'一時停止');db.title=srcBtn.title||'一時停止';db.innerHTML=srcBtn.innerHTML;db.onclick=()=>srcBtn.click();}
-      }else{circle?.style.removeProperty('display');document.getElementById('ghDigitalTimer')?.remove();}
-      box.querySelectorAll('[data-gh-design]').forEach(b=>{const on=b.dataset.ghDesign===design;b.classList.toggle('clk-segment--active',on);b.setAttribute('aria-pressed',String(on))});
-    };
-    box.addEventListener('click',e=>{const b=e.target.closest('[data-gh-design]');if(!b)return;localStorage.setItem('pctimerDesign',b.dataset.ghDesign);apply()});
-    setInterval(apply,300);apply();
-  };
-  setTimeout(installTimerExtras,100);setInterval(installTimerExtras,500);
+
   const fontWeight=document.querySelector('[aria-label="フォントの太さ"]');
   if(fontWeight){const p=fontWeight.closest('.clk-group')?.querySelector('.clk-weight-preview');fontWeight.addEventListener('input',()=>{if(p)p.style.fontWeight=fontWeight.value});}
   const fontSize=document.querySelector('[aria-label="文字サイズ"]');
