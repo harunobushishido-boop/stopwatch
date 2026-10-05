@@ -327,7 +327,7 @@ function stopNz(){if(nz){nz.s.stop();nz=null}}
 const wp=panes[4],WC=c=>c===0?['快晴','☀️']:c<=2?['晴れ','🌤️']:c===3?['曇り','☁️']:c<50?['霧','🌫️']:c<60?['霧雨','🌦️']:c<70?['雨','🌧️']:c<80?['雪','❄️']:c<90?['にわか雨','🌦️']:['雷雨','⛈️'];
 const pk=document.createElement('div');pk.innerHTML=T('t-pick');pk.style.display='none';pk.style.marginTop='12px';const wh=$('.clk-weather__head',wp);wh.after(pk);
 const wx_in=$('input',pk),wx_results=$('.clk-wx-picker__results',pk);
-let W=S.loc||null,auto=!S.loc,wxBusy=false,lastWxUpdate=0,wxRequest=0;
+let W=S.loc||null,auto=!S.loc,wxBusy=false,lastWxUpdate=0,wxRequest=0,weatherAutoRefresh=(()=>{try{return localStorage.getItem('pc-weather-auto')!=='0'}catch{return true}})();
 const eb=$('.clk-weather__edit-btn',wp),ab=$('.clk-weather__mode-btn',wp),wxRefresh=$('.clk-weather__refresh-btn',wp),rbt=$('span',wxRefresh);
 const pickerSetOpen=openFlag=>{pk.style.display=openFlag?'':'none';eb?.setAttribute('aria-expanded',String(openFlag));eb?.classList.toggle('clk-weather__edit-btn--open',openFlag);if(openFlag)wx_in.focus()};
 const pickerStatus=(msg,error=false)=>{if(!wx_results)return;wx_results.innerHTML='';const d=document.createElement('div');d.className='clk-wx-picker__status'+(error?' clk-wx-picker__status--error':'');d.textContent=msg;wx_results.appendChild(d)};
@@ -383,10 +383,11 @@ async function searchName(value){
   }catch(e){if(req===wxRequest)pickerStatus('検索に失敗しました。通信状況を確認してもう一度お試しください。',true)}
 }
 let searchTimer=0;
-wx_in.addEventListener('input',()=>{clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v){wx_results.innerHTML='';return}if(/^\d[\d- ]*$/.test(v)){const z=normZip(v);if(z.length===7)searchTimer=setTimeout(()=>searchZip(z),180);return}});
-wx_in.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v)return;if(/^\d[\d- ]*$/.test(v)){const z=normZip(v);if(/^\d{7}$/.test(z))searchZip(z);else pickerStatus('郵便番号は7桁の数字で入力してください。',true)}else searchName(v)});
-eb?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();pickerSetOpen(pk.style.display==='none')},true);
-ab?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();delete S.loc;auto=true;sv();geo()},true);
+wx_in.addEventListener('input',()=>{clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v){wx_results.innerHTML='';return}const z=normZip(v);const rest=v.replace(/[0-9\-\s〒]/g,'');if(z.length===7&&!rest)searchTimer=setTimeout(()=>searchZip(z),180)});
+wx_in.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v)return;const z=normZip(v);const rest=v.replace(/[0-9\-\s〒]/g,'');if(z.length===7&&!rest){searchZip(z);return}searchName(v)});
+const updateWeatherModeButton=()=>{if(!ab)return;const on=weatherAutoRefresh;const s=ab.querySelector('span');if(s)s.textContent=on?'自動':'手動';ab.setAttribute('aria-label',on?'自動更新中 — 押すと手動更新':'手動更新中 — 押すと自動更新');ab.setAttribute('title',on?'自動更新（押すと手動更新）':'手動更新（押すと自動更新）');};
+eb.onclick=e=>{e.preventDefault();e.stopPropagation();pickerSetOpen(pk.style.display==='none')};
+ab.onclick=e=>{e.preventDefault();e.stopPropagation();weatherAutoRefresh=!weatherAutoRefresh;try{localStorage.setItem('pc-weather-auto',weatherAutoRefresh?'1':'0')}catch{};updateWeatherModeButton();if(weatherAutoRefresh){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}};
 async function wx(lat,lon,name){
   const call=++wxRequest;wxBusy=true;if(rbt)rbt.textContent='更新中…';wxRefresh?.setAttribute('aria-busy','true');
   try{
@@ -406,6 +407,7 @@ wxRefresh?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();i
 setInterval(()=>{if(!wxBusy){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}},600000);
 setInterval(()=>{if(rbt&&lastWxUpdate&&!wxBusy){const m=Math.floor((Date.now()-lastWxUpdate)/60000);if(m>=1)rbt.textContent=m+'分前に更新';else rbt.textContent='更新したばかり'}},15000);
 S.loc?wx(S.loc.lat,S.loc.lon,S.loc.name):geo();
+updateWeatherModeButton();
 panel.addEventListener('click',e=>{if(e.target.closest('.clk-chime-select__play'))beep()});
 const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="sndSt"></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-s="vic">新記録</button><button data-s="pop">自動スタート</button><button data-s="se">タイマー終了</button></div>';
 $$('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
