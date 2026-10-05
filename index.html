@@ -404,7 +404,7 @@ async function wx(lat,lon,name){
 }
 const geo=()=>{const fallback=()=>{S.loc={...WEATHER_DEFAULT};S.weatherDefaultVersion=2;sv();wx(WEATHER_DEFAULT.lat,WEATHER_DEFAULT.lon,WEATHER_DEFAULT.name)};if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>wx(p.coords.latitude,p.coords.longitude,'現在地'),fallback,{enableHighAccuracy:false,maximumAge:300000,timeout:5000});else fallback()};
 wxRefresh?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(wxBusy)return;const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)},true);
-setInterval(()=>{if(!wxBusy){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}},600000);
+setInterval(()=>{if(weatherAutoRefresh&&!wxBusy){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}},600000);
 setInterval(()=>{if(rbt&&lastWxUpdate&&!wxBusy){const m=Math.floor((Date.now()-lastWxUpdate)/60000);if(m>=1)rbt.textContent=m+'分前に更新';else rbt.textContent='更新したばかり'}},15000);
 S.loc?wx(S.loc.lat,S.loc.lon,S.loc.name):geo();
 updateWeatherModeButton();
