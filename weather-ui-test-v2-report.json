@@ -1,19 +1,16 @@
 {
   "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 1,
-  "elapsed_ms": 379,
-  "forecast_requests": 0,
+  "completed_operations": 802,
+  "elapsed_ms": 8984,
+  "forecast_requests": 326,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
     "refresh_weather": true,
     "zip_search": true
   },
-  "browser_errors": [
-    "pageerror: $(...).forEach is not a function",
-    "pageerror: Cannot access 'mode' before initialization"
-  ],
-  "failure": "AssertionError [ERR_ASSERTION]: edit click #1\n\n'false' !== 'true'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:46:87",
-  "timestamp": "2026-10-05T10:10:32.970Z"
+  "browser_errors": [],
+  "failure": "AssertionError [ERR_ASSERTION]: zip close #1\n\n'true' !== 'false'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:64:12",
+  "timestamp": "2026-10-05T10:12:19.131Z"
 }
