@@ -24,12 +24,12 @@ jobs:
           sleep 2
       - name: Run 1000-cycle weather UI test
         run: node tests/weather-ui-1000.mjs
-      - name: Save report
+      - name: Save latest report
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -f weather-test-report.json ]; then
+          if [ -f weather-test-report-latest.json ]; then
             git add weather-test-report.json
             git commit -m "[skip ci] weather UI 1000-cycle test report" || true
             git push || true
