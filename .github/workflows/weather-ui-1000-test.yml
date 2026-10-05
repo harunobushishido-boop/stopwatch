@@ -1,0 +1,36 @@
+name: weather-ui-1000-test
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save playwright
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Start local server
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 >/tmp/stopwatch-http.log 2>&1 &
+          echo $! >/tmp/stopwatch-http.pid
+          sleep 2
+      - name: Run 1000-cycle weather UI test
+        run: node tests/weather-ui-1000.mjs
+      - name: Save report
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -f weather-test-report.json ]; then
+            git add weather-test-report.json
+            git commit -m "[skip ci] weather UI 1000-cycle test report" || true
+            git push || true
+          fi
