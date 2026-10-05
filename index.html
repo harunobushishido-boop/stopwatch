@@ -503,62 +503,47 @@ try{
   if(fontSize){const v=fontSize.closest('.clk-group')?.querySelector('.clk-size-value');fontSize.addEventListener('input',()=>{if(v)v.textContent=Math.round(Number(fontSize.value)*100)+'%'});}
 }catch(e){}
 
-/* Background UI recovery: use the reference design but make local upload reliable. */
+/* Background UI fix: one real photo/video switch, using the supplied reference layout. */
 try{
-  const bgPane=window.__clkBgApi?.bgB?.parentElement;
-  const photoPane=window.__clkBgApi?.bgB;
-  const bgInput=window.__clkBgApi?.bgInput;
-  if(bgPane&&photoPane){
-    const tabGroup=document.createElement('div');
-    tabGroup.className='clk-group';
-    tabGroup.id='ghBgTabs';
-    tabGroup.innerHTML='<div class="clk-segments" data-cols="2"><button type="button" class="clk-segment" aria-pressed="false">配色</button><button type="button" class="clk-segment clk-segment--active" aria-pressed="true">写真・動画</button></div>';
-    bgPane.insertBefore(tabGroup,bgPane.firstElementChild);
-    const tabButtons=[...tabGroup.querySelectorAll('.clk-segment')];
-    const paletteParts=[...bgPane.children].filter(x=>x!==tabGroup&&x!==photoPane&&!x.classList.contains('clk-panel__footnote'));
+  const panesAll=[...document.querySelectorAll('.clk-panel__pane')],bgA=panesAll[3],photoPane=document.getElementById('bgB'),bgInput=window.__clkBgApi?.bgInput;
+  document.getElementById('ghBgTabs')?.remove();
+  if(bgA&&photoPane){
     const innerOldTabs=photoPane.querySelector('.clk-segments');
-    if(innerOldTabs)innerOldTabs.closest('.clk-group')?.remove();
+    innerOldTabs?.closest('.clk-group')?.remove();
+    const topGroup=[...bgA.children].find(x=>x.querySelector?.('.clk-segments'));
+    const topSegs=topGroup?.querySelectorAll('.clk-segment');
+    const foot=[...bgA.children].find(x=>x.classList?.contains('clk-panel__footnote'));
+    const paletteParts=[...bgA.children].filter(x=>x!==topGroup&&x!==photoPane&&x!==foot);
     const setBgMode=(photo)=>{
-      tabButtons.forEach((b,i)=>{const on=photo?i===1:i===0;b.classList.toggle('clk-segment--active',on);b.setAttribute('aria-pressed',String(on))});
-      paletteParts.forEach(x=>{x.style.display=photo?'none':''});
+      if(topSegs?.length){
+        topSegs[0].classList.toggle('clk-segment--active',!photo);topSegs[0].setAttribute('aria-pressed',String(!photo));
+        topSegs[1].classList.toggle('clk-segment--active',photo);topSegs[1].setAttribute('aria-pressed',String(photo));
+      }
+      paletteParts.forEach(x=>x.style.display=photo?'none':'');
       photoPane.style.display=photo?'':'none';
+      photoPane.setAttribute('aria-hidden',String(!photo));
     };
-    tabButtons[0]?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setBgMode(false)});
-    tabButtons[1]?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setBgMode(true)});
+    document.addEventListener('click',e=>{
+      const b=e.target.closest?.('.clk-segment');
+      if(!b||!bgA.contains(b)||!topGroup?.contains(b))return;
+      const isPhoto=b.textContent.replace(/\s/g,'')==='写真・動画';
+      const isPalette=b.textContent.replace(/\s/g,'')==='配色';
+      if(!isPhoto&&!isPalette)return;
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();setBgMode(isPhoto);
+    },true);
     setBgMode(true);
-
     if(bgInput){
       bgInput.accept='image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v';
-      bgInput.style.display='none';
-      bgInput.style.position='fixed';
-      bgInput.style.width='1px';
-      bgInput.style.height='1px';
-      bgInput.style.opacity='0';
-      bgInput.style.pointerEvents='none';
-      const oldAdd=photoPane.querySelector('.clk-bg-thumb--add');
-      if(oldAdd&&!document.getElementById('ghBgAddButton')){
-        const add=document.createElement('button');
-        add.id='ghBgAddButton';
-        add.type='button';
-        add.className='clk-bg-thumb clk-bg-thumb--add';
-        add.setAttribute('aria-label','背景を追加');
-        add.title='写真または動画を選択';
-        add.innerHTML='<span class="clk-bg-thumb__preview clk-bg-thumb__preview--add"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg></span><span class="clk-bg-thumb__label">背景を追加</span>';
-        oldAdd.replaceWith(add);
-        add.addEventListener('click',e=>{
-          e.preventDefault();
-          e.stopPropagation();
-          try{
-            bgInput.value='';
-            bgInput.click();
-          }catch(err){
-            toast('ファイル選択を開けませんでした。ブラウザの設定をご確認ください。');
-          }
-        });
+      bgInput.style.display='none';bgInput.style.position='fixed';bgInput.style.width='1px';bgInput.style.height='1px';bgInput.style.opacity='0';bgInput.style.pointerEvents='none';
+      const add=document.getElementById('ghBgAddButton')||document.querySelector('#bgB .clk-bg-thumb--add');
+      if(add&&add.tagName!=='BUTTON'){
+        const btn=document.createElement('button');btn.id='ghBgAddButton';btn.type='button';btn.className=add.className;btn.setAttribute('aria-label','背景を追加');btn.title='写真または動画を選択';btn.innerHTML=add.innerHTML;add.replaceWith(btn);
       }
+      const addBtn=document.getElementById('ghBgAddButton');
+      addBtn?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();try{bgInput.value='';bgInput.click()}catch{toast('ファイル選択を開けませんでした。')}});
     }
   }
-}catch(e){console.warn('Background UI recovery failed',e);}
+}catch(e){console.warn('Background switch fix failed',e);}
 
 })();
 </script></body></html>
