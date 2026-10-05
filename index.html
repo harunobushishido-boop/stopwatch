@@ -280,7 +280,7 @@ $$('.clk-row,.clk-time-wrap,.clk-date').forEach(x=>x.onclick=()=>{if(mode==='tim
 let wl;panel.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const cl=[...b.classList].find(c=>/^clk-(segment|chip|font-tile|music-filter)$/.test(c));
 if(cl&&!b.closest('.clk-rec-chart-head')===false||cl){$$('.'+cl,b.parentElement).forEach(x=>{x.classList.remove(cl+'--active');x.setAttribute('aria-pressed','false')});b.classList.add(cl+'--active');b.setAttribute('aria-pressed','true')}
 if(b.classList.contains('clk-switch')){b.classList.toggle('clk-switch--on');const on=b.classList.contains('clk-switch--on'),l=b.getAttribute('aria-label');b.setAttribute('aria-pressed',on);
-if(l==='秒を表示')S.sec=on;if(l==='12時間表記')S.h12=on;if(l==='天気アイコンを表示'){S.wxi=on;$$('.clk-weather-inline').forEach(x=>x.style.display=on?'':'none')}if(l==='自動で計測する')S.auto=on;if(l==='バックグラウンドでも記録')S.bgrec=on;if(l==='自動で切り替える')S.palAuto=on;if(l==='達成したら音で知らせる')S.chime=on;{const k=SWK[l];if(k)S[k[0]]=on}if(l==='ブラウザ通知'&&on&&'Notification' in window)if(l==='止めるまで鳴らす'&&!on)stopAl();if(l==='リピート')rep=on?1:0;if(l==='シャッフル')shuf=on?1:0;
+if(l==='秒を表示')S.sec=on;if(l==='12時間表記')S.h12=on;if(l==='天気アイコンを表示'){S.wxi=on;$$('.clk-weather-inline').forEach(x=>x.style.display=on?'':'none')}if(l==='自動で計測する')S.auto=on;if(l==='バックグラウンドでも記録')S.bgrec=on;if(l==='自動で切り替える')S.palAuto=on;if(l==='達成したら音で知らせる')S.chime=on;{const k=SWK[l];if(k)S[k[0]]=on}if(l==='ブラウザ通知'&&on&&'Notification' in window)try{Notification.requestPermission().then(()=>{}).catch(()=>{})}catch(e){}if(l==='止めるまで鳴らす'&&!on)stopAl();if(l==='リピート')rep=on?1:0;if(l==='シャッフル')shuf=on?1:0;
 if(l==='自動（端末に合わせる）'){S.clockAuto=on;syncClockZoneUI()}if(l==='画面スリープ防止'){try{if(on&&navigator.wakeLock)navigator.wakeLock.request('screen').then(x=>wl=x).catch(()=>{wl=null});else if(wl){const x=wl;wl=null;x.release().catch(()=>{})}}catch(e){}}sv();try{rr()}catch(e){}tick()}});
 /* 設定 */
 const sp=panes[5],sl=$$('.clk-weight-slider',sp);sl[0].oninput=e=>shell.style.setProperty('--clk-font-scale',e.target.value);const fwSt=document.createElement('style');document.head.appendChild(fwSt);
@@ -504,6 +504,10 @@ try{
     box.innerHTML='<span class="clk-group__label">タイマーデザイン</span><p class="clk-group__hint">中央表示するタイマーの見た目を選べます。</p><div class="clk-segments" data-cols="2"><button type="button" class="clk-segment" data-gh-design="circle" aria-pressed="true">円形</button><button type="button" class="clk-segment" data-gh-design="digital" aria-pressed="false">デジタル</button></div>';
     layout.after(box);
     const apply=()=>{
+      const sizeInput=[...g.querySelectorAll('input[type="range"]')].find(x=>x.getAttribute('aria-label')==='大きさ');
+      const savedScale=Math.max(.7,Math.min(1.5,Number(localStorage.getItem('pctimerScale'))||1));
+      if(sizeInput){sizeInput.value=String(savedScale);const sv=sizeInput.closest('.clk-group')?.querySelector('.clk-size-value');if(sv)sv.textContent=Math.round(savedScale*100)+'%';}
+      shell.style.setProperty('--clk-timer-scale',String(savedScale));
       const design=localStorage.getItem('pctimerDesign')||'circle';
       const circle=document.querySelector('#stA .clk-timer-circle');
       if(design==='digital'&&circle){
@@ -525,7 +529,11 @@ try{
     box.addEventListener('click',e=>{const b=e.target.closest('[data-gh-design]');if(!b)return;localStorage.setItem('pctimerDesign',b.dataset.ghDesign);apply()});
     setInterval(apply,300);apply();
   };
-  setTimeout(installTimerExtras,100);
+  setTimeout(installTimerExtras,100);setInterval(installTimerExtras,500);
+  const fontWeight=document.querySelector('[aria-label="フォントの太さ"]');
+  if(fontWeight){const p=fontWeight.closest('.clk-group')?.querySelector('.clk-weight-preview');fontWeight.addEventListener('input',()=>{if(p)p.style.fontWeight=fontWeight.value});}
+  const fontSize=document.querySelector('[aria-label="文字サイズ"]');
+  if(fontSize){const v=fontSize.closest('.clk-group')?.querySelector('.clk-size-value');fontSize.addEventListener('input',()=>{if(v)v.textContent=Math.round(Number(fontSize.value)*100)+'%'});}
 }catch(e){}
 })();
 </script></body></html>
