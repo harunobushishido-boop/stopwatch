@@ -328,7 +328,7 @@ const wp=panes[4],WC=c=>c===0?['快晴','☀️']:c<=2?['晴れ','🌤️']:c===
 const pk=document.createElement('div');pk.innerHTML=T('t-pick');pk.style.display='none';pk.style.marginTop='12px';const wh=$('.clk-weather__head',wp);wh.after(pk);
 const wx_in=$('input',pk),wx_results=$('.clk-wx-picker__results',pk);
 let W=S.loc||null,auto=!S.loc,wxBusy=false,lastWxUpdate=0,wxRequest=0;
-const eb=$('.clk-weather__edit-btn',wp),ab=$('.clk-weather__mode-btn',wp),rb=$('.clk-weather__refresh-btn',wp),rbt=$('span',rb);
+const eb=$('.clk-weather__edit-btn',wp),ab=$('.clk-weather__mode-btn',wp),wxRefresh=$('.clk-weather__refresh-btn',wp),rbt=$('span',wxRefresh);
 const pickerSetOpen=openFlag=>{pk.style.display=openFlag?'':'none';eb?.setAttribute('aria-expanded',String(openFlag));eb?.classList.toggle('clk-weather__edit-btn--open',openFlag);if(openFlag)wx_in.focus()};
 const pickerStatus=(msg,error=false)=>{if(!wx_results)return;wx_results.innerHTML='';const d=document.createElement('div');d.className='clk-wx-picker__status'+(error?' clk-wx-picker__status--error':'');d.textContent=msg;wx_results.appendChild(d)};
 const normZip=v=>String(v||'').replace(/[^0-9]/g,'');
@@ -388,7 +388,7 @@ wx_in.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault(
 eb?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();pickerSetOpen(pk.style.display==='none')},true);
 ab?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();delete S.loc;auto=true;sv();geo()},true);
 async function wx(lat,lon,name){
-  const call=++wxRequest;wxBusy=true;if(rbt)rbt.textContent='更新中…';rb?.setAttribute('aria-busy','true');
+  const call=++wxRequest;wxBusy=true;if(rbt)rbt.textContent='更新中…';wxRefresh?.setAttribute('aria-busy','true');
   try{
     const r=await(await fetch('https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m,weather_code,precipitation_probability&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset&timezone=auto&forecast_days=7',{cache:'no-store'})).json(),c=r.current,w=WC(c.weather_code);
     if(call!==wxRequest)return;
@@ -397,12 +397,12 @@ async function wx(lat,lon,name){
     const hl=$('.clk-weather__hourly',wp);if(!hl._t&&hl.firstElementChild)hl._t=hl.firstElementChild.cloneNode(true);hl.innerHTML='';const st=r.hourly.time.findIndex(x=>x>=c.time.slice(0,13));for(let i=Math.max(0,st);i<st+24&&i<r.hourly.time.length;i++){const h=hl._t.cloneNode(true),ww=WC(r.hourly.weather_code[i]);$('.clk-weather__hour-time',h).textContent=+r.hourly.time[i].slice(11,13)+'時';const ic=$('.clk-weather__hour-icon',h);ic.innerHTML='<span style="font-size:20px">'+ww[1]+'</span>';ic.setAttribute('aria-label',ww[0]);$('.clk-weather__hour-temp',h).textContent=Math.round(r.hourly.temperature_2m[i])+'°';$('.clk-weather__hour-rain',h).textContent=(r.hourly.precipitation_probability[i]||0)+'%';hl.appendChild(h)}
     const dl=$('.clk-weather__daily',wp);if(!dl._t&&dl.firstElementChild)dl._t=dl.firstElementChild.cloneNode(true);dl.innerHTML='';const lo=Math.min(...r.daily.temperature_2m_min),hiT=Math.max(...r.daily.temperature_2m_max);r.daily.time.forEach((d,i)=>{const x=dl._t.cloneNode(true),ww=WC(r.daily.weather_code[i]);$('.clk-weather__day-name',x).textContent=i?D[new Date(d+'T00:00').getDay()]:'今日';const ic=$('.clk-weather__day-icon',x);ic.innerHTML='<span style="font-size:20px">'+ww[1]+'</span>';$('.clk-weather__day-rain',x).textContent=(r.daily.precipitation_probability_max[i]||0)+'%';$('.clk-weather__day-min',x).textContent=Math.round(r.daily.temperature_2m_min[i])+'°';$('.clk-weather__day-max',x).textContent=Math.round(r.daily.temperature_2m_max[i])+'°';const f=$('.clk-weather__day-bar-fill',x);f.style.left=((r.daily.temperature_2m_min[i]-lo)/(hiT-lo||1)*100)+'%';f.style.width=Math.max(8,(r.daily.temperature_2m_max[i]-r.daily.temperature_2m_min[i])/(hiT-lo||1)*100)+'%';dl.appendChild(x)});
     $$('.clk-weather-inline').forEach(b=>{b.querySelector('.clk-weather-inline__icon').innerHTML='<span>'+w[1]+'</span>';b.querySelector('.clk-weather-inline__temp').textContent=Math.round(c.temperature_2m)+'°';b.title=b.ariaLabel='天気予報を開く — '+name;b.onclick=e=>{e.stopPropagation();open(4)};b.style.display=S.wxi?'':'none'});
-    W={lat:+lat,lon:+lon,name};lastWxUpdate=Date.now();if(rbt)rbt.textContent='更新したばかり';rb?.setAttribute('aria-busy','false');
-  }catch(e){if(call===wxRequest){$('.clk-weather__loc-name',wp).textContent='天気を取得できませんでした';if(rbt)rbt.textContent='再取得';rb?.setAttribute('aria-busy','false')}}
+    W={lat:+lat,lon:+lon,name};lastWxUpdate=Date.now();if(rbt)rbt.textContent='更新したばかり';wxRefresh?.setAttribute('aria-busy','false');
+  }catch(e){if(call===wxRequest){$('.clk-weather__loc-name',wp).textContent='天気を取得できませんでした';if(rbt)rbt.textContent='再取得';wxRefresh?.setAttribute('aria-busy','false')}}
   finally{wxBusy=false}
 }
 const geo=()=>{const fallback=()=>{S.loc={...WEATHER_DEFAULT};S.weatherDefaultVersion=2;sv();wx(WEATHER_DEFAULT.lat,WEATHER_DEFAULT.lon,WEATHER_DEFAULT.name)};if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>wx(p.coords.latitude,p.coords.longitude,'現在地'),fallback,{enableHighAccuracy:false,maximumAge:300000,timeout:5000});else fallback()};
-rb?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(wxBusy)return;const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)},true);
+wxRefresh?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();if(wxBusy)return;const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)},true);
 setInterval(()=>{if(!wxBusy){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}},600000);
 setInterval(()=>{if(rbt&&lastWxUpdate&&!wxBusy){const m=Math.floor((Date.now()-lastWxUpdate)/60000);if(m>=1)rbt.textContent=m+'分前に更新';else rbt.textContent='更新したばかり'}},15000);
 S.loc?wx(S.loc.lat,S.loc.lon,S.loc.name):geo();
