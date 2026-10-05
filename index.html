@@ -386,8 +386,10 @@ let searchTimer=0;
 wx_in.addEventListener('input',()=>{clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v){wx_results.innerHTML='';return}const z=normZip(v);const rest=v.replace(/[0-9\-\s〒]/g,'');if(z.length===7&&!rest)searchTimer=setTimeout(()=>searchZip(z),180)});
 wx_in.addEventListener('keydown',e=>{if(e.key!=='Enter')return;e.preventDefault();clearTimeout(searchTimer);const v=wx_in.value.trim();if(!v)return;const z=normZip(v);const rest=v.replace(/[0-9\-\s〒]/g,'');if(z.length===7&&!rest){searchZip(z);return}searchName(v)});
 const updateWeatherModeButton=()=>{if(!ab)return;const on=weatherAutoRefresh;const s=ab.querySelector('span');if(s)s.textContent=on?'自動':'手動';ab.setAttribute('aria-label',on?'自動更新中 — 押すと手動更新':'手動更新中 — 押すと自動更新');ab.setAttribute('title',on?'自動更新（押すと手動更新）':'手動更新（押すと自動更新）');};
-eb.onclick=e=>{e.preventDefault();e.stopPropagation();pickerSetOpen(pk.style.display==='none')};
-ab.onclick=e=>{e.preventDefault();e.stopPropagation();weatherAutoRefresh=!weatherAutoRefresh;try{localStorage.setItem('pc-weather-auto',weatherAutoRefresh?'1':'0')}catch{};updateWeatherModeButton();if(weatherAutoRefresh){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}};
+const weatherEditAction=()=>{pickerSetOpen(pk.style.display==='none')};
+const weatherModeAction=()=>{weatherAutoRefresh=!weatherAutoRefresh;try{localStorage.setItem('pc-weather-auto',weatherAutoRefresh?'1':'0')}catch{};updateWeatherModeButton();if(weatherAutoRefresh){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}};
+const weatherRefreshAction=()=>{if(wxBusy)return;const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)};
+document.addEventListener('click',e=>{const t=e.target?.closest?.('.clk-weather__edit-btn,.clk-weather__mode-btn,.clk-weather__refresh-btn');if(!t||!wp.contains(t))return;e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();if(t===eb)weatherEditAction();else if(t===ab)weatherModeAction();else if(t===wxRefresh)weatherRefreshAction()},true);
 async function wx(lat,lon,name){
   const call=++wxRequest;wxBusy=true;if(rbt)rbt.textContent='更新中…';wxRefresh?.setAttribute('aria-busy','true');
   try{
@@ -403,7 +405,7 @@ async function wx(lat,lon,name){
   finally{wxBusy=false}
 }
 const geo=()=>{const fallback=()=>{S.loc={...WEATHER_DEFAULT};S.weatherDefaultVersion=2;sv();wx(WEATHER_DEFAULT.lat,WEATHER_DEFAULT.lon,WEATHER_DEFAULT.name)};if(navigator.geolocation)navigator.geolocation.getCurrentPosition(p=>wx(p.coords.latitude,p.coords.longitude,'現在地'),fallback,{enableHighAccuracy:false,maximumAge:300000,timeout:5000});else fallback()};
-wxRefresh.onclick=e=>{e.preventDefault();e.stopPropagation();if(wxBusy)return;const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)};
+
 setInterval(()=>{if(weatherAutoRefresh&&!wxBusy){const target=W||S.loc||WEATHER_DEFAULT;wx(target.lat,target.lon,target.name)}},600000);
 setInterval(()=>{if(rbt&&lastWxUpdate&&!wxBusy){const m=Math.floor((Date.now()-lastWxUpdate)/60000);if(m>=1)rbt.textContent=m+'分前に更新';else rbt.textContent='更新したばかり'}},15000);
 S.loc?wx(S.loc.lat,S.loc.lon,S.loc.name):geo();
