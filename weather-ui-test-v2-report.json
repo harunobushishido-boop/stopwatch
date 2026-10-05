@@ -1,9 +1,9 @@
 {
-  "ok": false,
+  "ok": true,
   "requested_operations": 1000,
-  "completed_operations": 802,
-  "elapsed_ms": 8984,
-  "forecast_requests": 326,
+  "completed_operations": 1000,
+  "elapsed_ms": 12673,
+  "forecast_requests": 426,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
@@ -11,6 +11,6 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": "AssertionError [ERR_ASSERTION]: zip close #1\n\n'true' !== 'false'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:64:12",
-  "timestamp": "2026-10-05T10:12:19.131Z"
+  "failure": null,
+  "timestamp": "2026-10-05T10:13:52.634Z"
 }
