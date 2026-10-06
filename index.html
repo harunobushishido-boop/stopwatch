@@ -547,6 +547,27 @@ tick();swSync();syncSw();
     });
   }
 
+  // Persist local music files and reuse the current track for the 12:45 scheduler.
+  try{
+    const musicApi=window.__clkMusicApi;
+    if(musicApi?.input&&musicApi?.addSavedFile){
+      const MDB='concentrated-clock-music-v1',MSTORE='tracks';
+      const openMusicDb=()=>new Promise((resolve,reject)=>{
+        const req=indexedDB.open(MDB,1);
+        req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(MSTORE))db.createObjectStore(MSTORE,{keyPath:'id',autoIncrement:true})};
+        req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+      });
+      musicApi.input.addEventListener('change',async()=>{
+        const files=[...(musicApi.input.files||[])];if(!files.length)return;
+        try{const db=await openMusicDb(),tx=db.transaction(MSTORE,'readwrite'),store=tx.objectStore(MSTORE);for(const file of files)store.add({name:file.name,type:file.type,blob:file});tx.oncomplete=()=>db.close();tx.onerror=()=>db.close()}catch{}
+      });
+      openMusicDb().then(db=>new Promise((resolve,reject)=>{
+        const req=db.transaction(MSTORE,'readonly').objectStore(MSTORE).getAll();
+        req.onsuccess=()=>{const rows=(req.result||[]).sort((a,b)=>a.id-b.id);for(const row of rows)if(row?.blob)musicApi.addSavedFile(row.blob);db.close();resolve()};
+        req.onerror=()=>{db.close();reject(req.error)};
+      })).catch(()=>{});
+    }
+  }catch{}
   // Make the local music controls robust when autoplay is blocked.
   const audio=document.querySelector('audio');
   if(audio){
