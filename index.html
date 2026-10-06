@@ -284,11 +284,11 @@ if(S.auto&&(!document.hidden||S.bgrec)){const k=key(new Date()),d=day(k),b=mi(k)
 setInterval(()=>run&&mode&&swDraw(),16);
 /* 12:45 定時音楽 + アラーム停止強化 */
 (()=>{
-  const MUSIC_PATH='./mogumogu.mp3';
+  const MUSIC_PATH='./もぐもぐの向こう側.mp3';
   let music12=null,lastMusicDate='';
   const music12Stop=()=>{try{if(music12){music12.pause();music12.currentTime=0}}catch(e){}};
   const music12Play=()=>{const d=new Date(),today=key(d);if(lastMusicDate===today)return;lastMusicDate=today;try{if(!music12){music12=new Audio(MUSIC_PATH);music12.preload='auto';music12.volume=1}music12.currentTime=0;const p=music12.play();if(p&&p.catch)p.catch(()=>sbShow('12:45の音楽を再生するには、ページを一度タップ/クリックしてください',5000));}catch(e){sbShow('12:45の音楽を再生できませんでした',5000)}};
-  const check1245=()=>{const d=new Date();if(d.getHours()===12&&d.getMinutes()===45&&d.getSeconds()===0)music12Play()};
+  const check1245=()=>{const d=new Date();if(d.getHours()===12&&d.getMinutes()===45)music12Play()};
   setTimeout(()=>{check1245();setInterval(check1245,1000)},500);
   window.__mogumoguMusic={play:music12Play,stop:music12Stop};
 })();
