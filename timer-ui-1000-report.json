@@ -1,0 +1,15 @@
+{
+  "ok": false,
+  "requested_operations": 1000,
+  "completed_operations": 2,
+  "features": {
+    "timer_stop": true,
+    "timer_reset": true,
+    "timer_close_x": true,
+    "alarm_stop_code": true,
+    "history_best_code": true
+  },
+  "browser_errors": [],
+  "failure": "AssertionError [ERR_ASSERTION]: stop failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:39:12",
+  "timestamp": "2026-10-06T22:36:17.970Z"
+}
