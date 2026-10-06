@@ -208,9 +208,10 @@ function tmShow(){
   const reset=$('.clk-timer-circle__reset',c);reset.style.fontFamily='var(--font-clock-ui),sans-serif';reset.style.fontSize='calc(clamp(11px,1.1vw,13px) * var(--clk-timer-scale,1))';reset.style.color='var(--clk-fg)';reset.style.background='#ffffff2e';reset.style.border='1px solid #ffffff2e';reset.style.borderRadius='999px';reset.style.padding='8px 14px';reset.style.fontWeight='600';reset.style.cursor='pointer';reset.style.touchAction='manipulation';
  }
  const label=x.name||'タイマー',time=mmss(x.left),pause=$('.clk-timer-circle__pause',c),reset=$('.clk-timer-circle__reset',c),close=$('.clk-timer-circle__close',c),progress=$('.clk-timer-circle__progress',c),total=2*Math.PI*46;
- close.onclick=e=>{e.preventDefault();e.stopPropagation();const t=pinned();if(!t)return;stopAl();tmArmed.delete(t.id);tms=tms.filter(x=>x!==t);if(pin===t.id){pin=0;try{localStorage.removeItem('pctimerPin')}catch(e){}}rt()};
- reset.onclick=e=>{e.preventDefault();e.stopPropagation();const t=pinned();if(!t)return;stopAl();t.left=t.tot;t.run=0;t.end=0;tmArmed.delete(t.id);rt()};
- pause.onclick=e=>{e.preventDefault();e.stopPropagation();toggleTimer(pinned())};
+ c.dataset.timerId=String(x.id);
+ close.onclick=e=>{e.preventDefault();e.stopPropagation();const t=tms.find(v=>v.id===Number(c.dataset.timerId));if(!t)return;stopAl();tmArmed.delete(t.id);tms=tms.filter(v=>v.id!==t.id);if(pin===t.id){pin=0;try{localStorage.removeItem('pctimerPin')}catch(e){}}rt()};
+ reset.onclick=e=>{e.preventDefault();e.stopPropagation();const t=tms.find(v=>v.id===Number(c.dataset.timerId));if(!t)return;stopAl();t.left=t.tot;t.run=0;t.end=0;tmArmed.delete(t.id);rt()};
+ pause.onclick=e=>{e.preventDefault();e.stopPropagation();const t=tms.find(v=>v.id===Number(c.dataset.timerId));if(!t)return;if(t.run){stopAl();t.left=Number.isFinite(t.end)?Math.max(0,Math.ceil((t.end-Date.now())/1000)):Math.max(0,Number(t.left)||0);t.run=0;t.end=0;tmArmed.delete(t.id)}else{if(!t.left)t.left=t.tot;t.run=1;t.end=Date.now()+t.left*1000;tmArmed.add(t.id)}rt()};
  $('.clk-timer-circle__label',c).textContent=label;$('.clk-timer-circle__time',c).textContent=time;c.setAttribute('aria-label',label+' '+time);
  pause.setAttribute('aria-label',x.run?'停止':'再開');pause.title=x.run?'停止':'再開';pause.innerHTML=ic(x.run?PAUSE:PLAY);
  reset.disabled=x.left===x.tot&&!x.run;reset.setAttribute('aria-disabled',String(reset.disabled));
