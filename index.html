@@ -282,20 +282,6 @@ let ch=0;tms.forEach(t=>{if(t.run){const armed=tmArmed.has(t.id),end=Number(t.en
 if(S.auto&&(!document.hidden||S.bgrec)){const k=key(new Date()),d=day(k),b=mi(k);d.s++;if(b<S.goal&&mi(k)>=S.goal&&S.chime!==false)beep();if(d.s%10===0)sv();if(panel.classList.contains('clk-panel--open')&&panes[1].classList.contains('clk-panel__pane--active'))rr()}};
 (()=>{let ok=0;try{const w=new Worker(URL.createObjectURL(new Blob(["setInterval(()=>postMessage('a'),200);setInterval(()=>postMessage('s'),1000)"],{type:'text/javascript'})));w.onmessage=e=>e.data==='s'?loop1s():autoChk();ok=1}catch(e){}if(!ok){setInterval(loop1s,1000);setInterval(autoChk,200)}})();
 setInterval(()=>run&&mode&&swDraw(),16);
-/* 12:45 定時音楽 + アラーム停止強化 */
-(()=>{
-  const MUSIC_PATH='./もぐもぐの向こう側.mp3';
-  let music12=null,lastMusicDate='';
-  const music12Stop=()=>{try{if(music12){music12.pause();music12.currentTime=0}}catch(e){}};
-  const music12Play=()=>{const d=new Date(),today=key(d);if(lastMusicDate===today)return;lastMusicDate=today;try{if(!music12){music12=new Audio(MUSIC_PATH);music12.preload='auto';music12.volume=1}music12.currentTime=0;const p=music12.play();if(p&&p.catch)p.catch(()=>sbShow('12:45の音楽を再生するには、ページを一度タップ/クリックしてください',5000));}catch(e){sbShow('12:45の音楽を再生できませんでした',5000)}};
-  const check1245=()=>{const d=new Date();if(d.getHours()===12&&d.getMinutes()===45)music12Play()};
-  setTimeout(()=>{check1245();setInterval(check1245,1000)},500);
-  window.__mogumoguMusic={play:music12Play,stop:music12Stop};
-})();
-(()=>{const oldRt=rt;const addStopButton=()=>{$('.clk-timer-row').forEach(r=>{const actions=$('.clk-timer-row__actions',r);if(!actions||actions.querySelector('[data-explicit-stop]'))return;const b=document.createElement('button');b.type='button';b.className='clk-timer-row__btn clk-timer-row__btn--stop';b.title='停止';b.setAttribute('aria-label','停止');b.dataset.explicitStop='1';b.textContent='停止';const reset=actions.querySelector('[title="リセット"]');if(reset)actions.insertBefore(b,reset);else actions.appendChild(b)})};rt=()=>{oldRt();addStopButton()};pane.addEventListener('click',e=>{const b=e.target.closest?.('[data-explicit-stop]');if(!b||mode!=='timer')return;e.preventDefault();e.stopImmediatePropagation();const r=b.closest('.clk-timer-row'),t=tms.find(x=>x.id==r?.dataset.id);if(!t)return;stopAl();t.left=Number.isFinite(t.end)?Math.max(0,Math.ceil((t.end-Date.now())/1000)):Math.max(0,Number(t.left)||0);t.run=0;t.end=0;tmArmed.delete(t.id);rt()},true)})();
-(()=>{const refreshBest=()=>{const v=swHistory.map(x=>Number(x.elapsed)).filter(x=>Number.isFinite(x)&&x>0);const best=v.length?Math.max(...v):0;$('.clk-lap-list .clk-lap').forEach(row=>{const label=$('.clk-lap__idx',row);if(label&&/最高記録|最短記録/.test(label.textContent)){label.textContent='最高記録';const val=$('.clk-lap__split',row);if(val)val.textContent=fm(best)}})};setTimeout(refreshBest,0)})();
-(()=>{const st=document.createElement('style');st.textContent='.clk-bg-thumb video{display:none!important}.clk-bg-thumb--video{background:#000}.clk-bg-thumb--video::after{content:"動画背景は非対応";display:flex;align-items:center;justify-content:center;position:absolute;inset:0;color:#fff;font-size:12px;background:#0008}';document.head.appendChild(st)})();
-
 /* ツールバー・パネル */
 let hT;const show=()=>{clearTimeout(hT);bar.classList.add('clk-controls--visible')},hide=()=>{if(!panel.classList.contains('clk-panel--open'))bar.classList.remove('clk-controls--visible')};
 addEventListener('mousemove',e=>e.clientY>innerHeight-90?show():(hT=setTimeout(hide,150)));addEventListener('touchstart',e=>e.touches[0].clientY>innerHeight-90?show():hide(),{passive:true});document.addEventListener('mouseleave',hide);
