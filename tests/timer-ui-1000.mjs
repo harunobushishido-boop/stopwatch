@@ -21,9 +21,10 @@ await page.route('https://geocoding-api.open-meteo.com/v1/search**',route=>route
 let completed=0;let failure=null;
 try{
   await page.goto(ORIGIN+'/index.html?timer-test=1000',{waitUntil:'domcontentloaded'});
-  await page.locator('button.clk-controls__btn[aria-label="タイマー"]').click({force:true});
+  await page.evaluate(()=>document.querySelector('button.clk-controls__btn[aria-label="タイマー"]')?.click());
   const timerMode=page.locator('.clk-mode-switch__btn').filter({hasText:'タイマー'}).first();
-  await timerMode.click({force:true});
+  await timerMode.waitFor({state:'attached',timeout:3000});
+  await timerMode.evaluate(el=>el.click());
   const preset=page.locator('.clk-preset-btn[aria-label="開始 1"]').first();
   assert.equal(await preset.count(),1);
 
