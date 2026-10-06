@@ -337,7 +337,7 @@ const scheduledPlayAt1245=()=>{if(!list.length)return false;const i=Math.min(Mat
 let scheduled1245Last='';
 const checkScheduled1245=()=>{const d=new Date(),k=d.getFullYear()+'-'+P(d.getMonth()+1)+'-'+P(d.getDate());if(d.getHours()===12&&d.getMinutes()===45&&d.getSeconds()>=0&&scheduled1245Last!==k){scheduled1245Last=k;scheduledPlayAt1245()}};
 mf.onchange=()=>{const n=list.length;[...mf.files].forEach(f=>list.push({n:f.name,u:URL.createObjectURL(f)}));if(list.length){idx=n<list.length?n:list.length-1;window.__clkScheduledMusic=list[idx];}if(au.paused)play(idx)};
-window.__clkMusicApi={playCurrent:scheduledPlayAt1245,getCurrent:()=>list[idx]||null,getList:()=>list.slice()};
+window.__clkMusicApi={playCurrent:scheduledPlayAt1245,getCurrent:()=>list[idx]||null,getList:()=>list.slice(),addSavedFile:file=>{if(!file)return null;const u=URL.createObjectURL(file);const item={n:file.name||'音楽',u};list.push(item);if(list.length===1)idx=0;gq('name').textContent=list[idx]?.n||'';return item}};
 setInterval(checkScheduled1245,1000);
 
 ui.onclick=e=>{const a=(e.target.closest('[data-a]')||{dataset:{}}).dataset.a;if(a==='add')mf.click();if(a==='prev')play(idx-1);if(a==='next')play(shuf?Math.floor(Math.random()*list.length):idx+1);
