@@ -9,11 +9,7 @@
     "alarm_stop_code": true,
     "history_best_code": true
   },
-  "browser_errors": [
-    "pageerror: $(...).forEach is not a function",
-    "pageerror: Cannot read properties of null (reading 'forEach')",
-    "pageerror: $(...).forEach is not a function"
-  ],
+  "browser_errors": [],
   "failure": "AssertionError [ERR_ASSERTION]: stop failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:40:12",
-  "timestamp": "2026-10-06T22:45:37.122Z"
+  "timestamp": "2026-10-06T22:48:29.844Z"
 }
