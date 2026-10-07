@@ -11,5 +11,5 @@
   },
   "browser_errors": [],
   "failure": "locator.click: Element is outside of the viewport\nCall log:\n  - waiting for locator('.clk-timer-circle__pause')\n    - locator resolved to <button title=\"停止\" type=\"button\" aria-label=\"停止\" aria-disabled=\"false\" class=\"clk-timer-circle__pause\">…</button>\n  - attempting click action\n    - scrolling into view if needed\n    - done scrolling\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:39:16",
-  "timestamp": "2026-10-07T07:33:34.697Z"
+  "timestamp": "2026-10-07T07:52:36.179Z"
 }
