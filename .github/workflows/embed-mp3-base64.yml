@@ -1,0 +1,50 @@
+name: Embed MP3 audio as Base64
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  embed-audio:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Convert MP3 to Base64 JavaScript
+        run: |
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+
+          files = {
+              "mogumogu": Path("もぐもぐの向こう側.mp3"),
+              "gaan": Path("ガーン02.mp3"),
+          }
+          out = Path("audio-base64.js")
+          parts = ["// Generated from the repository MP3 files. Do not edit manually.", "window.__STOPWATCH_MP3 = {"]
+          for key, path in files.items():
+              data = base64.b64encode(path.read_bytes()).decode("ascii")
+              parts.append(f'  {key}: "data:audio/mpeg;base64,{data}",')
+          parts.append("};")
+          out.write_text("\n".join(parts) + "\n", encoding="utf-8")
+          PY
+
+      - name: Remove MP3 files
+        run: |
+          rm -f "もぐもぐの向こう側.mp3" "ガーン02.mp3"
+          rm -f ".github/workflows/embed-mp3-base64.yml"
+
+      - name: Commit Base64 version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add audio-base64.js
+          git add -A
+          git commit -m "Replace MP3 files with Base64 audio"
+          git push
