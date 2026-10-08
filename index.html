@@ -839,7 +839,7 @@ const createOverlay=(test=false)=>{
   const old=document.getElementById('ghLunchVideoOverlay');if(old)closeOverlay();
   let v=test?document.createElement('video'):preloadVideo||document.createElement('video');
   if(!test&&v===preloadVideo)attachPreloadedVideo(v);
-  else if(!test||!preloadVideo){v.preload='auto';v.src=VIDEO_SRC;v.load()}
+  else{v.preload='auto';v.src=VIDEO_SRC;v.load()}
   v.controls=false;v.style.cssText='width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000';
   const w=document.createElement('div');w.id='ghLunchVideoOverlay';w.setAttribute('role','dialog');w.setAttribute('aria-label','動画再生');
   const b=document.createElement('button');b.className='ghLunchPlay';b.type='button';b.textContent='▶ 動画を再生';b.hidden=true;
@@ -865,13 +865,18 @@ const playNow=async(test=false)=>{
   try{
     const {v,b,fs}=createOverlay(test);
     try{await v.play();b.hidden=true;await fs();return true}
-    catch{b.hidden=false;if(!test)releaseLock();return false}
+    catch{b.hidden=false;return false}
   }catch{
     if(!test)releaseLock();
     busy=false;return false;
   }
 };
 window.__ghLunchVideoPlay=()=>playNow(true);
+const resumeActiveVideo=()=>{
+  if(document.visibilityState!=='visible')return;
+  const v=document.querySelector('#ghLunchVideoOverlay video');
+  if(v?.paused&&v.readyState>=2){v.play().catch(()=>{})}
+};
 const dueNow=()=>{
   if(played()||busy)return false;
   return Date.now()>=getTarget().getTime();
@@ -884,7 +889,8 @@ const scheduleExact=()=>{
   setTimeout(()=>{check();scheduleExact()},delay);
 };
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')check()});
-window.addEventListener('pageshow',check);
+window.addEventListener('pageshow',()=>{check();resumeActiveVideo()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){check();resumeActiveVideo()}});
 check();scheduleExact();setInterval(check,1000);
 })();
 </script><style id="ghVideoTestStyle">
