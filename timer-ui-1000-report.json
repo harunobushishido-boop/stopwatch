@@ -9,9 +9,7 @@
     "alarm_stop_code": true,
     "history_best_code": true
   },
-  "browser_errors": [
-    "console: Failed to load resource: the server responded with a status of 404 (File not found)"
-  ],
+  "browser_errors": [],
   "failure": "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('.clk-timer-circle') to be visible\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:35:18",
-  "timestamp": "2026-10-08T13:07:09.517Z"
+  "timestamp": "2026-10-08T13:13:34.549Z"
 }
