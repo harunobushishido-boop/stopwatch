@@ -1,0 +1,51 @@
+name: Build web video
+
+on:
+  push:
+    paths:
+      - 'もぐもぐの向こう側.mp4'
+      - '.gitattributes'
+      - '.github/workflows/video-web-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with LFS
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Create fast web copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "もぐもぐの向こう側.mp4"
+          ffmpeg -y -i "もぐもぐの向こう側.mp4" \
+            -vf "scale=1280:720:force_original_aspect_ratio=decrease,fps=24,pad=ceil(iw/2)*2:ceil(ih/2)*2" \
+            -c:v libx264 -preset ultrafast -crf 32 -pix_fmt yuv420p \
+            -movflags +faststart -c:a aac -b:a 80k \
+            "もぐもぐの向こう側-web.mp4"
+          ls -lh "もぐもぐの向こう側-web.mp4"
+
+      - name: Commit web copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "もぐもぐの向こう側-web.mp4"
+          if git diff --cached --quiet; then
+            echo "No change"
+            exit 0
+          fi
+          git commit -m "Generate fast web video copy"
+          git push
