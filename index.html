@@ -908,29 +908,67 @@ box.appendChild(btn);
 const foot=pane.querySelector('.clk-panel__footnote');pane.insertBefore(box,foot||null);
 btn.addEventListener('click',async()=>{if(typeof window.__ghLunchVideoPlay==='function'){btn.disabled=true;try{await window.__ghLunchVideoPlay(true)}finally{btn.disabled=false}}});
 })();
-</script><style id="ghRobustUiV3">
-/* 履歴ボタンと履歴一覧を常に右上へ */
+</script><style id="ghRobustUiV4">
+/* 計測履歴は右上の専用領域へ固定。中央のストップウォッチ領域と極力重ならない幅にする。 */
 .clk-stage--sw-main>.clk-sw-history-toggle{
- position:fixed!important;top:max(14px,calc(env(safe-area-inset-top) + 10px));right:max(14px,calc(env(safe-area-inset-right) + 10px));
- align-self:auto!important;margin:0!important;z-index:30;
+  position:fixed!important;
+  top:max(14px,calc(env(safe-area-inset-top) + 10px));
+  right:max(14px,calc(env(safe-area-inset-right) + 10px));
+  align-self:auto!important;
+  margin:0!important;
+  z-index:130!important;
 }
 .clk-stage--sw-main>.clk-sw-history-panel{
- position:fixed!important;top:max(66px,calc(env(safe-area-inset-top) + 62px));right:max(14px,calc(env(safe-area-inset-right) + 10px));
- align-self:auto!important;margin:0!important;z-index:30;
- width:min(92vw,520px)!important;max-width:calc(100vw - 28px);
+  position:fixed!important;
+  top:max(68px,calc(env(safe-area-inset-top) + 64px));
+  right:max(14px,calc(env(safe-area-inset-right) + 10px));
+  bottom:auto!important;
+  align-self:auto!important;
+  margin:0!important;
+  z-index:125!important;
+  box-sizing:border-box;
+  width:min(26vw,320px)!important;
+  max-width:calc(100vw - 28px);
+  max-height:min(42vh,360px);
+  overflow:auto;
 }
 .clk-stage--sw-main>.clk-sw-history-panel .clk-lap__split,
 .clk-stage--sw-main>.clk-sw-history-panel .clk-lap__total{text-align:right}
 .clk-stage--sw-main>.clk-sw-history-toggle[aria-expanded="true"]{transform:translateY(-1px)}
-/* 設定を開いても全画面時のタイマー位置を変えない */
+/* 下のツールバーは設定・他パネルを開いても同じ位置に固定 */
+.clk-shell .clk-controls--visible,
+.clk-shell--panel-open .clk-controls,
+.clk-shell--panel-open .clk-controls--visible{
+  transform:translate(-50%) translateY(0)!important;
+}
+/* 全画面表示中に設定を開いてもタイマー本体の位置・サイズを動かさない */
 html.gh-fullscreen-active .clk-shell--panel-open .clk-stage,
-html.gh-fullscreen-active .clk-shell--panel-open .clk-bg,
-html.gh-fullscreen-active .clk-shell--panel-open .clk-controls{transform:none!important}
-html.gh-fullscreen-active .clk-shell{width:100vw!important;height:100vh!important;height:100dvh!important}
+html.gh-fullscreen-active .clk-shell--panel-open .clk-bg{
+  transform:none!important;
+}
+html.gh-fullscreen-active .clk-shell{
+  width:100vw!important;
+  height:100vh!important;
+  height:100dvh!important;
+}
 html.gh-fullscreen-active .clk-panel{z-index:100!important}
+@media(max-width:900px) and (min-width:721px){
+  .clk-stage--sw-main>.clk-sw-history-panel{
+    width:min(26vw,270px)!important;
+  }
+}
 @media(max-width:720px){
- .clk-stage--sw-main>.clk-sw-history-toggle{top:max(10px,calc(env(safe-area-inset-top) + 8px));right:max(10px,calc(env(safe-area-inset-right) + 8px))}
- .clk-stage--sw-main>.clk-sw-history-panel{top:max(60px,calc(env(safe-area-inset-top) + 58px));right:max(10px,calc(env(safe-area-inset-right) + 8px));width:min(94vw,520px)!important}
+  .clk-stage--sw-main>.clk-sw-history-toggle{
+    top:max(10px,calc(env(safe-area-inset-top) + 8px));
+    right:max(10px,calc(env(safe-area-inset-right) + 8px));
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel{
+    top:max(60px,calc(env(safe-area-inset-top) + 58px));
+    right:max(10px,calc(env(safe-area-inset-right) + 8px));
+    width:min(86vw,300px)!important;
+    max-width:calc(100vw - 20px);
+    max-height:min(40vh,300px);
+  }
 }
 </style>
 <script id="ghFullscreenPersistence">
