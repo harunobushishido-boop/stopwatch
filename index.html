@@ -771,90 +771,123 @@ try{
 #ghLunchVideoOverlay video{display:block;width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000}
 #ghLunchVideoOverlay .ghLunchPlay{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border:0;border-radius:999px;padding:16px 28px;background:rgba(255,255,255,.96);color:#111;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 8px 30px rgba(0,0,0,.35);z-index:2}
 #ghLunchVideoOverlay .ghLunchPlay[hidden]{display:none}
-#ghLunchVideoPreloader{position:fixed;left:-10000px;top:-10000px;width:1px;height:1px;opacity:.001;pointer-events:none}
-</style>
-<script id="ghLunchVideoSchedulerScript">
+#ghLunchVideoPreload{position:fixed;left:-2px;top:-2px;width:1px;height:1px;opacity:.001;pointer-events:none}
+</style><script id="ghLunchVideoSchedulerScript">
 (()=>{'use strict';
-const SRC='https://media.githubusercontent.com/media/harunobushishido-boop/stopwatch/main/%E3%82%82%E3%81%90%E3%82%82%E3%81%90%E3%81%AE%E5%90%91%E3%81%93%E3%81%86%E5%81%B4.mp4';
-const PLAYED='ghLunchVideoPlayedDate-v4',LOCK='ghLunchVideoLock-v4',CHANNEL='ghLunchVideoChannel-v4';
-const PRELOAD_MIN=5,LOCK_MS=15*60*1000,OWNER=Math.random().toString(36).slice(2)+Date.now().toString(36);
-let busy=false,ending=false,pre=null,ch=null;
-try{ch='BroadcastChannel' in window?new BroadcastChannel(CHANNEL):null}catch{}
+const VIDEO_SRC='https://media.githubusercontent.com/media/harunobushishido-boop/stopwatch/main/%E3%82%82%E3%81%90%E3%82%82%E3%81%90%E3%81%AE%E5%90%91%E3%81%93%E3%81%86%E5%81%B4.mp4';
+const PLAYED_KEY='ghLunchVideoPlayedDate-v3',LOCK_KEY='ghLunchVideoLock-v3',CHANNEL_NAME='ghLunchVideoChannel-v3';
+const OWNER=Math.random().toString(36).slice(2)+Date.now().toString(36);
+const LOCK_MS=20*60*1000, PRELOAD_MINUTES=5;
+let busy=false,closing=false,channel=null,preloadVideo=null,preloadReady=false;
+try{channel='BroadcastChannel' in window?new BroadcastChannel(CHANNEL_NAME):null}catch{}
 const pad=n=>String(n).padStart(2,'0');
-const day=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
-const target=()=>{const d=new Date();d.setHours(12,45,0,0);return d};
-const wasPlayed=()=>{try{return localStorage.getItem(PLAYED)===day()}catch{return false}};
-const markPlayed=()=>{try{localStorage.setItem(PLAYED,day())}catch{}};
-const readLock=()=>{try{return JSON.parse(localStorage.getItem(LOCK)||'null')}catch{return null}};
-const release=()=>{try{if(readLock()?.owner===OWNER)localStorage.removeItem(LOCK)}catch{}};
-const acquire=()=>{const now=Date.now(),x=readLock();if(x&&x.expires>now&&x.owner!==OWNER)return false;try{localStorage.setItem(LOCK,JSON.stringify({owner:OWNER,expires:now+LOCK_MS,day:day()}));const y=readLock();return y?.owner===OWNER&&y.expires>now}catch{return false}};
-const send=m=>{try{ch?.postMessage(m)}catch{}};
-const remove=()=>{
+const dayKey=(d=new Date())=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const getTarget=(d=new Date())=>{const t=new Date(d);t.setHours(12,45,0,0);return t};
+const played=()=>{try{return localStorage.getItem(PLAYED_KEY)===dayKey()}catch{return false}};
+const markPlayed=()=>{try{localStorage.setItem(PLAYED_KEY,dayKey())}catch{}};
+const readLock=()=>{try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}};
+const acquireLock=()=>{
+  if(played())return false;
+  const now=Date.now(),cur=readLock();
+  if(cur&&cur.expires>now&&cur.owner!==OWNER)return false;
+  try{
+    const lock={owner:OWNER,expires:now+LOCK_MS,day:dayKey()};
+    localStorage.setItem(LOCK_KEY,JSON.stringify(lock));
+    const check=readLock();
+    return check?.owner===OWNER&&check?.expires>now;
+  }catch{return false}
+};
+const releaseLock=()=>{try{const x=readLock();if(x?.owner===OWNER)localStorage.removeItem(LOCK_KEY)}catch{}};
+const announce=msg=>{try{channel?.postMessage(msg)}catch{}};
+const destroyPreload=()=>{
+  const v=preloadVideo;if(!v)return;
+  try{v.pause()}catch{}
+  v.removeAttribute('src');try{v.load()}catch{}
+  v.remove();preloadVideo=null;preloadReady=false;
+};
+const ensurePreload=()=>{
+  if(played()||preloadVideo)return;
+  const now=new Date(),target=getTarget(now),remaining=target-now;
+  if(remaining>PRELOAD_MINUTES*60*1000||remaining<0)return;
+  const v=document.createElement('video');
+  v.id='ghLunchVideoPreload';v.preload='auto';v.muted=true;v.playsInline=true;v.setAttribute('aria-hidden','true');v.src=VIDEO_SRC;
+  v.addEventListener('canplay',()=>{preloadReady=true});
+  document.body.appendChild(v);
+  try{v.load()}catch{}
+  preloadVideo=v;
+};
+const closeOverlay=()=>{
   const w=document.getElementById('ghLunchVideoOverlay');if(!w)return;
   const v=w.querySelector('video');
   try{if(document.fullscreenElement===v)document.exitFullscreen()}catch{}
   try{v?.pause()}catch{}
   if(v){v.removeAttribute('src');try{v.load()}catch{}}
-  w.remove();busy=false;ending=false;
+  w.remove();busy=false;closing=false;
 };
-const clearPreload=()=>{
-  if(!pre)return;
-  try{pre.pause()}catch{}
-  pre.removeAttribute('src');try{pre.load()}catch{};pre.remove();pre=null;
+channel&&(channel.onmessage=e=>{
+  const m=e.data||{};
+  if(m.owner===OWNER)return;
+  if(m.type==='start'&&!m.test)closeOverlay();
+  if(m.type==='finish'&&!m.test)closeOverlay();
+});
+const attachPreloadedVideo=v=>{
+  if(preloadVideo===v){preloadVideo=null;preloadReady=false}
+  v.muted=false;v.controls=false;v.autoplay=true;v.playsInline=false;v.removeAttribute('playsinline');
+  return v;
 };
-const preload=()=>{
-  if(pre||busy||document.getElementById('ghLunchVideoOverlay'))return;
-  const v=document.createElement('video');v.id='ghLunchVideoPreloader';v.src=SRC;v.preload='auto';v.muted=true;v.playsInline=true;
-  document.body.appendChild(v);pre=v;try{v.load()}catch{}
-};
-const make=()=>{
-  const old=document.getElementById('ghLunchVideoOverlay');if(old)remove();
-  const w=document.createElement('div');w.id='ghLunchVideoOverlay';w.setAttribute('role','dialog');w.setAttribute('aria-label','12時45分動画');
-  let v=pre;pre=null;
-  if(!v){v=document.createElement('video');v.src=SRC}
-  v.id='';v.preload='auto';v.autoplay=true;v.controls=false;v.playsInline=false;v.muted=false;
-  v.style.cssText='width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000';
+const createOverlay=(test=false)=>{
+  const old=document.getElementById('ghLunchVideoOverlay');if(old)closeOverlay();
+  let v=test?document.createElement('video'):preloadVideo||document.createElement('video');
+  if(!test&&v===preloadVideo)attachPreloadedVideo(v);
+  else if(!test||!preloadVideo){v.preload='auto';v.src=VIDEO_SRC;v.load()}
+  v.controls=false;v.style.cssText='width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000';
+  const w=document.createElement('div');w.id='ghLunchVideoOverlay';w.setAttribute('role','dialog');w.setAttribute('aria-label','動画再生');
   const b=document.createElement('button');b.className='ghLunchPlay';b.type='button';b.textContent='▶ 動画を再生';b.hidden=true;
   w.append(v,b);document.body.appendChild(w);
   const fs=async()=>{try{if(v.requestFullscreen&&!document.fullscreenElement)await v.requestFullscreen()}catch{}};
-  const attempt=async()=>{try{await v.play();b.hidden=true;await fs();return true}catch{b.hidden=false;return false}};
-  v.onended=()=>{if(ending)return;ending=true;const test=v.dataset.test==='1';if(!test)markPlayed();release();send({type:'finish',owner:OWNER});remove();};
-  v.onerror=()=>{b.hidden=false;b.textContent='▶ 動画を再生（クリック）'};
-  b.onclick=attempt;
-  return {v,attempt};
+  const finish=()=>{
+    if(closing)return;closing=true;
+    if(!test)markPlayed();
+    if(!test)announce({type:'finish',owner:OWNER,test:false});
+    releaseLock();destroyPreload();closeOverlay();
+  };
+  v.onended=finish;
+  v.onerror=()=>{b.hidden=false};
+  b.onclick=async()=>{b.hidden=true;try{await v.play();await fs()}catch{b.hidden=false}};
+  return {v,b,fs};
 };
-const play=async(arg=false)=>{
-  const test=typeof arg==='object'?!!arg.test:!!arg;
+const playNow=async(test=false)=>{
   if(busy)return false;
-  if(!test&&wasPlayed())return false;
-  if(!acquire())return false;
-  busy=true;send({type:'start',owner:OWNER,test});
-  try{const ui=make();ui.v.dataset.test=test?'1':'0';return await ui.attempt()}catch{release();busy=false;return false}
-};
-window.__ghLunchVideoPlay=arg=>play(arg);
-ch&&(ch.onmessage=e=>{if(e.data?.owner!==OWNER&&(e.data?.type==='start'||e.data?.type==='finish')){remove();busy=false}});
-const due=()=>!busy&&!wasPlayed()&&Date.now()>=target().getTime();
-const near=()=>{if(busy||wasPlayed())return false;const left=target().getTime()-Date.now();return left>0&&left<=PRELOAD_MIN*60000};
-const check=async()=>{
-  if(due()){
-    const ok=await play(false);
-    if(!ok){
-      const v=document.getElementById('ghLunchVideoOverlay')?.querySelector('video');
-      if(v&&document.visibilityState==='visible')try{await v.play()}catch{}
-    }
-    return;
+  if(!test&&played())return false;
+  if(!test&&!acquireLock())return false;
+  busy=true;
+  if(!test)announce({type:'start',owner:OWNER,test:false});
+  try{
+    const {v,b,fs}=createOverlay(test);
+    try{await v.play();b.hidden=true;await fs();return true}
+    catch{b.hidden=false;if(!test)releaseLock();return false}
+  }catch{
+    if(!test)releaseLock();
+    busy=false;return false;
   }
-  if(near())preload();
-  const v=document.getElementById('ghLunchVideoOverlay')?.querySelector('video');
-  if(v&&busy&&v.paused&&document.visibilityState==='visible')try{await v.play();await (async()=>{try{if(v.requestFullscreen&&!document.fullscreenElement)await v.requestFullscreen()}catch{}})()}catch{}
 };
-const schedule=()=>{const t=target().getTime(),now=Date.now(),next=t>now?t:t+86400000;setTimeout(()=>{check();schedule()},Math.max(250,next-now))};
+window.__ghLunchVideoPlay=()=>playNow(true);
+const dueNow=()=>{
+  if(played()||busy)return false;
+  return Date.now()>=getTarget().getTime();
+};
+const check=()=>{ensurePreload();if(dueNow())playNow(false)};
+const scheduleExact=()=>{
+  const now=new Date(),target=getTarget(now);
+  if(target<=now)target.setDate(target.getDate()+1);
+  const delay=Math.max(250,target-now);
+  setTimeout(()=>{check();scheduleExact()},delay);
+};
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')check()});
-window.addEventListener('pageshow',check);window.addEventListener('focus',check);
-check();schedule();setInterval(check,1000);
+window.addEventListener('pageshow',check);
+check();scheduleExact();setInterval(check,1000);
 })();
-</script>
-<style id="ghVideoTestStyle">
+</script><style id="ghVideoTestStyle">
 #ghVideoTestGroup{margin-top:14px;padding:12px;border:1px solid #00000012;border-radius:12px;background:#ffffff99}
 #ghVideoTestGroup .gh-video-test-btn{width:100%;min-height:40px;margin-top:8px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .16s,transform .16s,opacity .16s}
 #ghVideoTestGroup .gh-video-test-btn:hover{background:#0000000b;transform:translateY(-1px)}
