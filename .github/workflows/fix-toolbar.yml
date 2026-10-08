@@ -1,0 +1,102 @@
+name: Apply toolbar alignment fix
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Patch toolbar alignment
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("index.html")
+          s = p.read_text(encoding="utf-8")
+
+          marker = "ghToolbarSidebarAlignmentV1"
+          if marker in s:
+              raise SystemExit(0)
+
+          patch = r'''
+<style id="ghToolbarSidebarAlignmentV1">
+/* 下部ツールバーを右サイドバー分だけ左へ移動し、残りの領域の中央に配置 */
+.clk-shell .clk-controls--visible,
+.clk-shell--panel-open .clk-controls,
+.clk-shell--panel-open .clk-controls--visible {
+  transform: translateX(calc(-50% - (var(--gh-right-sidebar-width, 0px) / 2))) translateY(0) !important;
+}
+html.gh-fullscreen-active .clk-shell--panel-open .clk-controls {
+  transform: translateX(calc(-50% - (var(--gh-right-sidebar-width, 0px) / 2))) translateY(0) !important;
+}
+</style>
+<script id="ghToolbarSidebarAlignmentScript">
+(function () {
+  function updateToolbarOffset() {
+    var shell = document.querySelector(".clk-shell");
+    if (!shell) return;
+
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var candidates = Array.from(document.querySelectorAll(".clk-panel"))
+      .filter(function (el) {
+        var r = el.getBoundingClientRect();
+        var cs = getComputedStyle(el);
+        return r.width > 0 &&
+               r.height > 0 &&
+               r.right > vw * 0.55 &&
+               cs.display !== "none" &&
+               cs.visibility !== "hidden";
+      })
+      .sort(function (a, b) {
+        return b.getBoundingClientRect().right - a.getBoundingClientRect().right;
+      });
+
+    var width = 0;
+    if (candidates.length) {
+      var r = candidates[0].getBoundingClientRect();
+      if (r.left < vw && r.right > vw * 0.55) {
+        width = Math.max(0, Math.min(vw * 0.8, vw - r.left));
+      }
+    }
+
+    shell.style.setProperty("--gh-right-sidebar-width", width + "px");
+  }
+
+  window.addEventListener("resize", updateToolbarOffset, { passive: true });
+  window.addEventListener("orientationchange", updateToolbarOffset, { passive: true });
+
+  var observer = new MutationObserver(function () {
+    requestAnimationFrame(updateToolbarOffset);
+  });
+  observer.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
+
+  requestAnimationFrame(updateToolbarOffset);
+  setTimeout(updateToolbarOffset, 300);
+  setTimeout(updateToolbarOffset, 1000);
+})();
+</script>
+'''
+
+          if "</body>" in s:
+              s = s.replace("</body>", patch + "</body>", 1)
+          elif "</html>" in s:
+              s = s.replace("</html>", patch + "</html>", 1)
+          else:
+              s += patch
+
+          p.write_text(s, encoding="utf-8")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git rm .github/workflows/fix-toolbar.yml
+          git commit -m "右サイドバーに合わせて下部ツールバーを左へ移動"
+          git push
