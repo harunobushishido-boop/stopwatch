@@ -1,16 +1,18 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 13633,
-  "forecast_requests": 426,
+  "elapsed_ms": 8762,
+  "forecast_requests": 425,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
     "refresh_weather": true,
     "zip_search": true
   },
-  "browser_errors": [],
-  "failure": null,
-  "timestamp": "2026-10-15T12:39:25.586Z"
+  "browser_errors": [
+    "pageerror: Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded."
+  ],
+  "failure": "AssertionError [ERR_ASSERTION]: browser errors: pageerror: Failed to execute 'atob' on 'Window': The string to be decoded is not correctly encoded.\n\n1 !== 0\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:68:10\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processImmediate (node:internal/timers:452:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)",
+  "timestamp": "2026-10-15T12:44:42.992Z"
 }
