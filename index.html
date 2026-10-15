@@ -831,6 +831,9 @@ channel&&(channel.onmessage=e=>{
 });
 const attachPreloadedVideo=v=>{
   if(preloadVideo===v){preloadVideo=null;preloadReady=false}
+  // Remove the preload-only ID; its CSS intentionally hides the tiny preloaded video.
+  // If kept after promotion, the scheduled video would keep playing invisibly.
+  if(v.id==='ghLunchVideoPreload')v.removeAttribute('id');
   v.muted=false;v.controls=false;v.autoplay=true;v.playsInline=true;v.setAttribute('playsinline','');
   return v;
 };
