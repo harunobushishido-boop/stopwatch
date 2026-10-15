@@ -1049,4 +1049,50 @@ html.gh-fullscreen-active .clk-shell--panel-open .clk-controls {
   setTimeout(updateToolbarOffset, 1000);
 })();
 </script>
-</body></html>
+<script id="ghEnsureSoundTest">
+(()=>{'use strict';
+const install=()=>{
+  const panes=[...document.querySelectorAll('.clk-panel__pane')];
+  const pane=panes.find(p=>p.querySelector('.clk-panel__footnote')&&p.querySelector('[aria-label="フォントの太さ"]'))||panes[5];
+  if(!pane)return false;
+  let group=[...pane.querySelectorAll('.clk-group')].find(g=>g.querySelector('.clk-group__label')?.textContent.trim()==='音のテスト');
+  if(!group){
+    group=document.createElement('div');
+    group.className='clk-group';
+    group.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="pcSoundTestStatus">ボタンを押すと音を確認できます。</p><div data-pc-sound-buttons style="display:flex;gap:8px;flex-wrap:wrap"></div>';
+    const foot=pane.querySelector('.clk-panel__footnote');
+    pane.insertBefore(group,foot||null);
+  }
+  group.style.display='block';
+  group.style.visibility='visible';
+  const row=group.querySelector('[data-pc-sound-buttons]')||group.querySelector('div');
+  if(!row)return false;
+  let button=group.querySelector('button[data-s="longest"]');
+  if(!button){
+    button=document.createElement('button');
+    button.type='button';
+    button.dataset.s='longest';
+    button.textContent='最長記録更新';
+    button.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';
+    row.appendChild(button);
+  }
+  if(button.dataset.pcSoundBound!=='1'){
+    button.dataset.pcSoundBound='1';
+    button.addEventListener('click',()=>{
+      const status=group.querySelector('#sndSt,#pcSoundTestStatus');
+      if(typeof window.__clkLongestRecordMusic==='function'){
+        window.__clkLongestRecordMusic();
+        if(status)status.textContent='最長記録更新の音をテスト再生しています。';
+      }else if(status){
+        status.textContent='音声の準備ができていません。ページを再読み込みしてください。';
+      }
+    });
+  }
+  return true;
+};
+if(!install()){
+  let tries=0;
+  const timer=setInterval(()=>{tries++;if(install()||tries>=30)clearInterval(timer)},250);
+}
+})();
+</script></body></html>
