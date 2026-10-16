@@ -772,7 +772,7 @@ try{
 </style><script id="ghLunchVideoSchedulerScript">
 (()=>{'use strict';
 const VIDEO_SRC='https://media.githubusercontent.com/media/harunobushishido-boop/stopwatch/main/%E3%82%82%E3%81%90%E3%82%82%E3%81%90%E3%81%AE%E5%90%91%E3%81%93%E3%81%86%E5%81%B4.mp4';
-const PLAYED_KEY='ghLunchVideoPlayedDate-v4',LOCK_KEY='ghLunchVideoLock-v4',CHANNEL_NAME='ghLunchVideoChannel-v4';
+const PLAYED_KEY='ghLunchVideoPlayedDate-v5',LOCK_KEY='ghLunchVideoLock-v5',CHANNEL_NAME='ghLunchVideoChannel-v5';
 const OWNER=Math.random().toString(36).slice(2)+Date.now().toString(36);
 const LOCK_MS=20*60*1000, PRELOAD_MINUTES=15, START_GRACE_MS=15*60*1000;
 let busy=false,closing=false,channel=null,preloadVideo=null,preloadReady=false,fallbackPlayedDate='',fallbackLock=null,lastFailureAt=0;
@@ -842,7 +842,7 @@ const createOverlay=(test=false)=>{
   let v=test?document.createElement('video'):preloadVideo||document.createElement('video');
   if(!test&&v===preloadVideo)attachPreloadedVideo(v);
   else{v.preload='auto';v.muted=false;v.autoplay=true;v.playsInline=true;v.setAttribute('playsinline','');v.src=VIDEO_SRC;v.load()}
-  v.controls=false;v.style.cssText='width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000';
+  v.controls=false;v.style.cssText='position:fixed;inset:0;display:block;width:100vw;height:100vh;width:100dvw;height:100dvh;max-width:none;max-height:none;object-fit:contain;background:#000';
   const w=document.createElement('div');w.id='ghLunchVideoOverlay';w.setAttribute('role','dialog');w.setAttribute('aria-label','動画再生');
   const b=document.createElement('button');b.className='ghLunchPlay';b.type='button';b.textContent='▶ 動画を再生';b.hidden=true;
   w.append(v,b);document.body.appendChild(w);
@@ -854,8 +854,8 @@ const createOverlay=(test=false)=>{
     releaseLock();destroyPreload();closeOverlay();
   };
   v.onended=finish;
-  v.onerror=()=>{b.hidden=false};
-  b.onclick=async()=>{b.hidden=true;if(!test&&!played()&&!acquireLock()){b.hidden=false;return}busy=true;closing=false;if(!test)announce({type:'start',owner:OWNER,test:false});try{v.muted=false;const full=fs();const playing=v.play();await Promise.all([full,playing])}catch{v.muted=true;b.hidden=false;busy=false;closing=false;lastFailureAt=Date.now();if(!test)releaseLock()}};
+  v.onerror=()=>{b.textContent='動画を読み込めません。タップして再試行';b.hidden=false;busy=false;closing=false;lastFailureAt=Date.now();if(!test)releaseLock()};
+  b.onclick=async()=>{b.hidden=true;if(!test&&!played()&&!acquireLock()){b.textContent='別のタブで動画を再生中です';b.hidden=false;return}busy=true;closing=false;if(!test)announce({type:'start',owner:OWNER,test:false});try{v.muted=false;const full=fs();const playing=v.play();await Promise.all([full,playing])}catch{try{v.muted=true;await v.play();b.textContent='🔊 音声をオンにして全画面表示';b.hidden=false;return}catch{}b.textContent='再生できません。タップしてもう一度試してください';b.hidden=false;busy=false;closing=false;lastFailureAt=Date.now();if(!test)releaseLock()}};
   return {v,b,fs};
 };
 const playNow=async(test=false)=>{
