@@ -427,7 +427,7 @@ pm.forEach(b=>b.addEventListener('click',()=>pal(b.style.backgroundColor,$('.clk
 $$('.clk-palette-mini--special',bgA).forEach(b=>b.addEventListener('click',()=>{if(/ランダム/.test(b.textContent))pm[Math.floor(Math.random()*pm.length)].click();else ci.click()}));
 ci.oninput=()=>{const c=ci.value,r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);pal(`rgb(${r},${g},${b})`,lum(c)>.5?'#1F2937':'#F5EFE6')};
 const bgInput=$('.clk-bg-thumb__input',bgB),bgClear=document.createElement('button');bgClear.id='clkBgClear';bgClear.type='button';bgClear.className='clk-todo-form__add';bgClear.textContent='アップロードした背景を削除';bgClear.hidden=true;bgClear.style.marginTop='10px';$('.clk-bg-hint',bgB)?.after(bgClear);bgInput.accept='image/*';bgInput.onchange=e=>{const f=e.target.files?.[0];if(!installBackground(f))e.target.value=''};bgClear.addEventListener('click',()=>{if(pm[0])pm[0].click();bgInput.value='';toast('アップロードした背景を削除しました。')});window.__clkBgApi={get fgAuto(){return fgAuto},set fgAuto(value){fgAuto=!!value},applyAutoForeground,setForeground,installBackground,bgInput,bgB};/* 音楽 + YouTube */
-const au=$('audio'),mp=panes[2];let list=[],idx=0,rep=0,shuf=0,nz;const longestRecordAudio=new Audio();longestRecordAudio.preload='auto';const playLongestRecordMusic=()=>{try{const saved=list.find(x=>/ガーン02/.test(String(x.n||''))||/^ガーン/.test(String(x.n||'')));if(!saved){try{sbShow('最長記録の音楽を鳴らすには「ガーン02.mp3」をBGMに追加してください',6000)}catch(e){};return false}longestRecordAudio.pause();longestRecordAudio.src=saved.u;longestRecordAudio.currentTime=0;longestRecordAudio.volume=Math.max(0,Math.min(1,Number(au.volume)||.7));const p=longestRecordAudio.play();if(p?.catch)p.catch(()=>{try{sbShow('「ガーン02.mp3」を再生できませんでした',5000)}catch(e){}});return true}catch(e){return false}};window.__clkLongestRecordMusic=playLongestRecordMusic;const ui=document.createElement('div'),mf=document.createElement('input');mf.type='file';mf.accept='audio/*';mf.multiple=true;
+const au=$('audio'),mp=panes[2];let list=[],idx=0,rep=0,shuf=0,nz;const longestRecordAudio=new Audio();longestRecordAudio.preload='none';const playLongestRecordMusic=()=>{try{longestRecordAudio.pause();longestRecordAudio.removeAttribute('src');longestRecordAudio.load();vic();return true}catch(e){try{sbShow('ファンファンファンファーンを再生できませんでした',5000)}catch(_e){}return false}};window.__clkLongestRecordMusic=playLongestRecordMusic;const ui=document.createElement('div'),mf=document.createElement('input');mf.type='file';mf.accept='audio/*';mf.multiple=true;
 ui.className='clk-group';ui.innerHTML='<span class="clk-group__label">自分の音楽ファイル</span><p class="clk-group__hint" data-a="name">ファイルを追加して再生します</p><div class="clk-todo-form__row" style="gap:8px"><button class="clk-todo-form__add" data-a="add" type="button">＋ ファイル</button><button class="clk-todo-form__add" data-a="prev" aria-label="前の曲" type="button">⏮</button><button class="clk-todo-form__add" data-a="pp" aria-label="再生・一時停止" type="button">▶</button><button class="clk-todo-form__add" data-a="next" aria-label="次の曲" type="button">⏭</button></div><input class="clk-weight-slider" type="range" min="0" max="1" step=".01" value=".7" aria-label="音量" style="margin:14px 0 4px;width:100%"><div class="clk-switch-row"><div><div class="clk-switch-row__label">リピート</div><div class="clk-switch-row__hint">最後の曲のあと、最初に戻って再生します</div></div><button aria-label="リピート" aria-pressed="false" class="clk-switch" type="button"><span class="clk-switch__thumb"></span></button></div><div class="clk-switch-row"><div><div class="clk-switch-row__label">シャッフル</div><div class="clk-switch-row__hint">ランダムな順番で再生します</div></div><button aria-label="シャッフル" aria-pressed="false" class="clk-switch" type="button"><span class="clk-switch__thumb"></span></button></div>';mp.insertBefore(ui,mp.lastElementChild);
 const yt=document.createElement('div');yt.className='clk-group';yt.style.display='none';yt.innerHTML='<span class="clk-group__label">YouTube</span><p class="clk-group__hint">動画またはプレイリストのURLを貼り付けて再生します</p><div class=\"clk-todo-form clk-yt-url-row\"><input class=\"clk-todo-form__title\" type=\"url\" inputmode=\"url\" autocomplete=\"off\" autocapitalize=\"none\" spellcheck=\"false\" aria-label=\"YouTubeのURL\" placeholder=\"https://www.youtube.com/watch?v=...\"><button class=\"clk-todo-form__add\" data-yt-clear aria-label=\"YouTubeのURLを削除\" type=\"button\">クリア</button><button class=\"clk-todo-form__add\" data-yt-play type=\"button\">再生</button></div><div id="ytf" style="margin-top:12px;aspect-ratio:16/9;display:none"></div>';mp.insertBefore(yt,mp.lastElementChild);
 const gq=a=>$(`[data-a=${a}]`,ui),segs=$$('.clk-segment',mp);const vs=[...mp.children].filter(c=>c!==yt&&c!==ui&&c!==mp.firstElementChild&&!c.matches('.clk-panel__footnote'));
@@ -535,7 +535,7 @@ setInterval(()=>{if(rbt&&lastWxUpdate&&!wxBusy){const m=Math.floor((Date.now()-l
 S.loc?wx(S.loc.lat,S.loc.lon,S.loc.name):geo();
 updateWeatherModeButton();
 panel.addEventListener('click',e=>{if(e.target.closest('.clk-chime-select__play'))beep()});
-const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="sndSt"></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-s="vic">新記録</button><button data-s="pop">自動スタート</button><button data-s="se">タイマー終了</button><button data-s="longest">最長記録更新</button></div>';
+const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="sndSt"></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-s="vic">新記録</button><button data-s="pop">自動スタート</button><button data-s="se">タイマー終了</button><button data-s="longest">ファンファンファンファーン</button></div>';
 $('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep,longest:playLongestRecordMusic})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
 const sndSt=()=>{$('#sndSt').textContent=ac&&ac.state==='running'?'音声：有効':'音声：ブロック中です。ページ内を一度クリックしてください'};sndSt();setInterval(sndSt,1000);
 {const cr=document.createElement('p');cr.className='clk-panel__footnote';cr.id='pcCredit';cr.style.textAlign='center';cr.textContent='制作者：宍戸陽信';panes[5].appendChild(cr)}
@@ -1075,11 +1075,11 @@ const install=()=>{
     button=document.createElement('button');
     button.type='button';
     button.dataset.s='longest';
-    button.textContent='最長記録更新';
+    button.textContent='ファンファンファンファーン';
     button.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';
     row.appendChild(button);
   }
-  if(button.dataset.pcSoundBound!=='1'){
+  if(button.dataset.pcSoundBound!=='1'&&typeof button.onclick!=='function'){
     button.dataset.pcSoundBound='1';
     button.addEventListener('click',()=>{
       const status=group.querySelector('#sndSt,#pcSoundTestStatus');
@@ -1098,4 +1098,64 @@ if(!install()){
   const timer=setInterval(()=>{tries++;if(install()||tries>=30)clearInterval(timer)},250);
 }
 })();
-</script></body></html>
+</script><style id="ghTabletHistoryLayoutV1">
+/* Tablet: give the history panel enough width for lap labels and columns. */
+@media (min-width:721px) and (max-width:1180px){
+  .clk-stage--sw-main>.clk-sw-history-toggle{
+    position:fixed!important;
+    top:max(12px,calc(env(safe-area-inset-top) + 10px));
+    right:max(12px,calc(env(safe-area-inset-right) + 12px));
+    max-width:calc(100vw - 24px);
+    box-sizing:border-box;
+    z-index:130!important;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel{
+    position:fixed!important;
+    top:max(64px,calc(env(safe-area-inset-top) + 62px));
+    right:max(12px,calc(env(safe-area-inset-right) + 12px));
+    left:auto!important;
+    bottom:auto!important;
+    width:min(68vw,520px)!important;
+    max-width:calc(100vw - 24px)!important;
+    max-height:min(56vh,440px)!important;
+    margin:0!important;
+    padding:10px 12px 12px!important;
+    box-sizing:border-box;
+    overflow:auto;
+    z-index:125!important;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-sw-history-tools{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-sw-history-actions{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-lap{
+    grid-template-columns:minmax(64px,.85fr) minmax(76px,1fr) minmax(78px,1fr)!important;
+    gap:8px!important;
+    padding:8px 9px!important;
+    overflow-wrap:anywhere;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-lap__idx{
+    min-width:0;
+    white-space:normal;
+  }
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-lap__split,
+  .clk-stage--sw-main>.clk-sw-history-panel .clk-lap__total{
+    min-width:0!important;
+    text-align:right;
+    overflow-wrap:anywhere;
+    font-variant-numeric:tabular-nums;
+  }
+}
+@media (min-width:721px) and (max-width:840px){
+  .clk-stage--sw-main>.clk-sw-history-panel{
+    width:min(76vw,520px)!important;
+  }
+}
+</style></body></html>
