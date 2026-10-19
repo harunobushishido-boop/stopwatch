@@ -396,11 +396,11 @@ function renderTimeAnalysis(){
  root.innerHTML='<div class="gh-ta-intro"><div class="gh-ta-kicker">CLEANING TIME REPORT</div><h2>掃除タイムの分析</h2><p>ストップウォッチで計測して「完了」を押した結果を集計。記録と比較して、掃除時間の変化を確認できます。</p></div>'+
  '<div class="gh-ta-metrics">'+metric('記録回数',rows.length+'回','保存済みの計測件数')+metric('合計時間',fmtLong(total),'これまでの掃除時間')+metric('平均タイム',rows.length?fmt(avg):'—','1回あたり')+metric('最速タイム',rows.length?fmt(best):'—','最短の記録')+metric('最長タイム',rows.length?fmt(longest):'—','最長の記録')+metric('前回のタイム',latest?fmt(latest.elapsed):'—',latest?dateText(latest.at):'記録なし')+'</div>'+
  '<section class="gh-ta-section"><div class="gh-ta-section-head"><h3>タイムの推移</h3><span class="gh-ta-badge">直近 '+recent.length+' 回</span></div>'+chart+'</section>'+
- '<section class="gh-ta-section"><div class="gh-ta-section-head"><h3>分析コメント（定型文）</h3><span class="gh-ta-badge">API接続なし</span></div><p class="gh-ta-comment">'+esc(comment)+'</p><p class="gh-ta-note" style="margin-top:8px">記録回数・前回との差・時間のばらつきに応じて、用意した定型文を選んで表示します。外部の生成AI APIには接続しません。掃除する範囲や汚れ具合が異なると、タイムだけでは効率を正確に判断できません。</p></section>'+
+ '<section class="gh-ta-section"><div class="gh-ta-section-head"><h3>分析コメント</h3></div><p class="gh-ta-comment">'+esc(comment)+'</p></section>'+
  '<section class="gh-ta-section"><div class="gh-ta-section-head"><h3>計測結果一覧</h3><span class="gh-ta-badge">'+rows.length+' 件</span></div>'+
  (rows.length?'<div class="gh-ta-table-wrap"><table class="gh-ta-table"><thead><tr><th>計測日</th><th>タイム</th><th>前の記録との差</th><th>ラップ数</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="gh-ta-note" style="margin-top:8px">最新20件を表示。差がマイナスなら前の記録より短縮、プラスなら時間が長くなっています。</p>':'<p class="gh-ta-muted">記録がありません。ストップウォッチで掃除を計測し、完了ボタンを押すとここに追加されます。</p>')+
  '<div class="gh-ta-actions" style="margin-top:12px"><button id="ghTaCsv" type="button" class="gh-ta-btn gh-ta-btn-primary">分析表をCSV保存</button><button id="ghTaRefresh" type="button" class="gh-ta-btn">再分析</button></div></section>'+
- '<p class="gh-ta-note">記録はこのブラウザー内に保存されます。コメントは定型文から選び、記録を外部へ送信しません。</p>';
+ '';
  root.dataset.analysisSignature=signature;root.dataset.analysisReady='1';
  const csvButton=root.querySelector('#ghTaCsv');
  if(csvButton)csvButton.addEventListener('click',()=>{
@@ -1223,17 +1223,17 @@ if(!install()){
 .gh-ta,.gh-ta *{box-sizing:border-box;min-width:0}
 .gh-ta-intro{padding:7px 2px 2px;overflow-wrap:anywhere}
 .gh-ta-kicker{font-size:10px;letter-spacing:.14em;opacity:.62;font-weight:800;margin-bottom:5px}
-.gh-ta-intro h2{font-size:clamp(20px,3.5vw,24px);font-weight:800;line-height:1.3;letter-spacing:.01em;margin:0}
-.gh-ta-intro p,.gh-ta-muted{font-size:12px;line-height:1.7;opacity:.74;margin-top:7px}
+.gh-ta-intro h2{font-size:clamp(18px,2.8vw,21px);font-weight:800;line-height:1.3;letter-spacing:.01em;margin:0}
+.gh-ta-intro p,.gh-ta-muted{font-size:11px;line-height:1.7;opacity:.74;margin-top:7px}
 .gh-ta-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;width:100%}
 .gh-ta-card{min-width:0;border:1px solid var(--clk-border,rgba(127,127,127,.24));border-radius:12px;padding:11px 12px;background:var(--clk-card,rgba(127,127,127,.055));overflow:hidden}
-.gh-ta-card small{display:block;font-size:11px;line-height:1.4;opacity:.72;margin-bottom:6px}
-.gh-ta-card strong{display:block;font-size:clamp(17px,3vw,22px);font-weight:800;line-height:1.25;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
-.gh-ta-card em{display:block;font-size:10px;line-height:1.5;font-style:normal;opacity:.62;margin-top:5px;overflow-wrap:anywhere}
+.gh-ta-card small{display:block;font-size:10px;line-height:1.35;white-space:nowrap;opacity:.72;margin-bottom:6px}
+.gh-ta-card strong{display:block;font-size:clamp(15px,2.5vw,20px);font-weight:800;line-height:1.25;white-space:nowrap;overflow-wrap:normal;word-break:normal;font-variant-numeric:tabular-nums}
+.gh-ta-card em{display:block;font-size:9px;line-height:1.45;font-style:normal;opacity:.62;margin-top:5px;overflow-wrap:anywhere}
 .gh-ta-section{width:100%;min-width:0;border:1px solid var(--clk-border,rgba(127,127,127,.24));border-radius:13px;padding:12px;background:var(--clk-card,rgba(127,127,127,.035));overflow:hidden}
 .gh-ta-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
-.gh-ta-section h3{font-size:14px;line-height:1.4;font-weight:800;margin:0}
-.gh-ta-badge{display:inline-flex;align-items:center;max-width:100%;font-size:10px;line-height:1.35;white-space:normal;border-radius:99px;padding:4px 8px;background:var(--clk-accent-soft,rgba(40,160,140,.12));color:var(--clk-accent,currentColor)}
+.gh-ta-section h3{font-size:13px;line-height:1.4;font-weight:800;margin:0}
+.gh-ta-badge{display:inline-flex;align-items:center;max-width:100%;font-size:9px;line-height:1.3;white-space:nowrap;border-radius:99px;padding:4px 8px;background:var(--clk-accent-soft,rgba(40,160,140,.12));color:var(--clk-accent,currentColor)}
 .gh-ta-chart{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:clamp(2px,1vw,6px);align-items:end;min-height:128px;padding:9px 1px 0;border-bottom:1px solid var(--clk-border,rgba(127,127,127,.24))}
 .gh-ta-chart-col{height:116px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px}
 .gh-ta-bar{width:min(22px,78%);min-height:4px;border-radius:5px 5px 1px 1px;background:var(--clk-accent,#35a99b);opacity:.82}
@@ -1245,10 +1245,10 @@ if(!install()){
 .gh-ta-table th:first-child,.gh-ta-table td:first-child{text-align:left}
 .gh-ta-table tr:last-child td{border-bottom:0}
 .gh-ta-diff-good{color:#17856f;font-weight:800}.gh-ta-diff-warn{color:#c17b22;font-weight:800}
-.gh-ta-comment{font-size:13px;line-height:1.9;margin:0;overflow-wrap:anywhere}
-.gh-ta-note{font-size:10px;line-height:1.7;opacity:.62;margin-top:8px;overflow-wrap:anywhere}
+.gh-ta-comment{font-size:12px;line-height:1.7;margin:0;overflow-wrap:anywhere}
+.gh-ta-note{font-size:9px;line-height:1.55;opacity:.62;margin-top:8px;overflow-wrap:anywhere}
 .gh-ta-actions{display:flex;flex-wrap:wrap;gap:8px}
-.gh-ta-btn{appearance:none;max-width:100%;border:1px solid var(--clk-border,rgba(127,127,127,.3));border-radius:9px;padding:9px 12px;background:transparent;color:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.gh-ta-btn{appearance:none;max-width:100%;font-size:11px;border:1px solid var(--clk-border,rgba(127,127,127,.3));border-radius:9px;padding:9px 12px;background:transparent;color:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .gh-ta-btn-primary{background:var(--clk-accent,#35a99b);color:#fff;border-color:transparent}
 @media(min-width:620px){
  .gh-ta-metrics{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -1258,8 +1258,8 @@ if(!install()){
 @media(max-width:380px){
  .gh-ta-metrics{gap:6px}
  .gh-ta-card{padding:9px}
- .gh-ta-card small{font-size:10px}
- .gh-ta-card strong{font-size:16px}
+ .gh-ta-card small{font-size:9px}
+ .gh-ta-card strong{font-size:14px}
  .gh-ta-section{padding:10px}
 }
 </style></body></html>
