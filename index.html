@@ -367,6 +367,7 @@ function renderTimeAnalysis(){
  const root=document.getElementById('timeAnalysisRoot');if(!root)return;
  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
  const rows=(Array.isArray(swHistory)?swHistory:[]).filter(r=>r&&Number.isFinite(Number(r.at))&&Number.isFinite(Number(r.elapsed))&&Number(r.elapsed)>0).slice().sort((a,b)=>a.at-b.at);
+ const signature=rows.map(r=>String(r.id)+':'+r.at+':'+r.elapsed+':'+(r.laps||[]).join(',')).join('|');if(root.dataset.analysisReady==='1'&&root.dataset.analysisSignature===signature)return;
  const fmt=e=>fm(Math.max(0,Number(e)||0));
  const fmtLong=e=>{const n=Math.max(0,Math.floor((Number(e)||0)/1000)),hh=Math.floor(n/3600),mm=Math.floor(n%3600/60),ss=n%60;return hh?hh+'時間'+String(mm).padStart(2,'0')+'分':mm+'分'+String(ss).padStart(2,'0')+'秒'};
  const dateText=at=>{const d=new Date(at);return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')};
@@ -408,10 +409,11 @@ function renderTimeAnalysis(){
  (rows.length?'<div class="gh-ta-table-wrap"><table class="gh-ta-table"><thead><tr><th>計測日</th><th>タイム</th><th>前の記録との差</th><th>ラップ数</th></tr></thead><tbody>'+tableRows+'</tbody></table></div><p class="gh-ta-note" style="margin-top:8px">最新20件を表示。差がマイナスなら前の記録より短縮、プラスなら時間が長くなっています。</p>':'<p class="gh-ta-muted">記録がありません。ストップウォッチで掃除を計測し、完了ボタンを押すとここに追加されます。</p>')+
  '<div class="gh-ta-actions" style="margin-top:12px"><button id="ghTaCsv" type="button" class="gh-ta-btn gh-ta-btn-primary">分析表をCSV保存</button><button id="ghTaRefresh" type="button" class="gh-ta-btn">再分析</button></div></section>'+
  '<p class="gh-ta-note">記録はこのブラウザー内に保存されます。自動分析は端末内で行い、記録を外部へ送信しません。</p>';
+ root.dataset.analysisSignature=signature;root.dataset.analysisReady='1';
  const csvButton=root.querySelector('#ghTaCsv');
  if(csvButton)csvButton.addEventListener('click',()=>{
   const csvRows=[['計測日','タイム','経過時間(ms)','ラップ数'],...rows.map(r=>[dateText(r.at),fmt(r.elapsed),Math.round(r.elapsed),r.laps?.length||0])];
-  const csv='\\uFEFF'+csvRows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\\r\\n');
+  const csv='\uFEFF'+csvRows.map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='掃除タイム分析.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
  });
