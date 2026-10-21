@@ -597,7 +597,7 @@ if(S.weatherLocationMode==='gps')geo();else wx(S.loc.lat,S.loc.lon,S.loc.name);
 updateWeatherModeButton();
 panel.addEventListener('click',e=>{if(e.target.closest('.clk-chime-select__play'))beep()});
 const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<span class="clk-group__label">音のテスト</span><p class="clk-group__hint" id="sndSt"></p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-s="vic">新記録</button><button data-s="pop">自動スタート</button><button data-s="se">タイマー終了</button><button data-s="longest">ファンファンファンファーン</button></div>';
-$('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep,longest:playLongestRecordMusic})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
+$$('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep,longest:playLongestRecordMusic})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
 const sndSt=()=>{$('#sndSt').textContent=ac&&ac.state==='running'?'音声：有効':'音声：ブロック中です。ページ内を一度クリックしてください'};sndSt();setInterval(sndSt,1000);
 {const cr=document.createElement('p');cr.className='clk-panel__footnote';cr.id='pcCredit';cr.style.textAlign='center';cr.textContent='制作者：宍戸陽信';panes[5].appendChild(cr)}
 tick();swSync();syncSw();
