@@ -5,8 +5,8 @@ import fs from 'node:fs/promises';
 const ORIGIN='http://127.0.0.1:4173';
 const FORECAST={
   current:{temperature_2m:18,apparent_temperature:17,relative_humidity_2m:61,weather_code:0,wind_speed_10m:4,time:'2026-10-07T07:00'},
-  hourly:{time:Array.from({length:48},(_,i)=>'2026-10-07T'+String((7+i)%24).padStart(2,'0')+':00'),temperature_2m:Array(48).fill(18),weather_code:Array(48).fill(0),precipitation_probability:Array(48).fill(0)},
-  daily:{time:['2026-10-07','2026-10-08','2026-10-09','2026-10-10','2026-10-11','2026-10-12','2026-10-13'],weather_code:Array(7).fill(0),temperature_2m_max:Array(7).fill(22),temperature_2m_min:Array(7).fill(15),precipitation_probability_max:Array(7).fill(0),sunrise:Array(7).fill('2026-10-07T05:32'),sunset:Array(7).fill('2026-10-07T17:18')}
+  hourly:{time:Array.from({length:48},(_,i)=>'2026-10-07T'+String((7+i)%24).padStart(2,'0')+':00'),temperature_2m:Array(48).fill(18),weather_code:Array(48).fill(0),precipitation:Array(48).fill(0),precipitation_probability:Array(48).fill(0)},
+  daily:{time:['2026-10-07','2026-10-08','2026-10-09','2026-10-10','2026-10-11','2026-10-12','2026-10-13'],weather_code:Array(7).fill(0),temperature_2m_max:Array(7).fill(22),temperature_2m_min:Array(7).fill(15),precipitation_sum:Array(7).fill(0),precipitation_probability_max:Array(7).fill(0),sunrise:Array(7).fill('2026-10-07T05:32'),sunset:Array(7).fill('2026-10-07T17:18')}
 };
 
 const browser=await chromium.launch({headless:true});
@@ -15,7 +15,9 @@ const page=await context.newPage();
 const errors=[];
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
-await page.route('https://api.open-meteo.com/v1/forecast**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(FORECAST)}));
+const forecastMock=route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(FORECAST)});
+await page.route('https://api.open-meteo.com/v1/jma**',forecastMock);
+await page.route('https://api.open-meteo.com/v1/forecast**',forecastMock);
 await page.route('https://geocoding-api.open-meteo.com/v1/search**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({results:[]})}));
 
 let completed=0;let failure=null;
