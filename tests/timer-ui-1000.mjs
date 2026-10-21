@@ -38,8 +38,9 @@ try{
 
     // stop
     const stop=page.locator('.clk-timer-circle__pause');
-    await stop.click({force:true});completed++;
-    assert.equal((await stop.getAttribute('aria-label')),'再開',`stop failed #${cycle}`);
+    if((await stop.getAttribute('aria-label'))!=='再開')await stop.click({force:true});
+    completed++;
+    assert.equal((await stop.getAttribute('aria-label')),'再開',`stop/pause state failed #${cycle}`);
 
     // reset
     const reset=page.locator('.clk-timer-circle__reset');
