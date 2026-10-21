@@ -230,9 +230,22 @@
     return 'https://api.open-meteo.com/v1/forecast?' + params.toString();
   }
 
+  function getWeatherApiKey() {
+    let key = '';
+    try { key = String(localStorage.getItem('pc-weatherapi-key') || '').trim(); } catch (error) {}
+    if (!key && typeof window.prompt === 'function') {
+      key = String(window.prompt('WeatherAPI.com のAPIキーを入力してください。入力したキーはこのブラウザー内に保存されます。') || '').trim();
+      if (key) {
+        try { localStorage.setItem('pc-weatherapi-key', key); } catch (error) {}
+      }
+    }
+    if (!key) throw new Error('WeatherAPI.comのAPIキーが設定されていません');
+    return key;
+  }
+
   function makeWeatherApiUrl(lat, lon) {
     const params = new URLSearchParams({
-      key: WEATHERAPI_KEY,
+      key: getWeatherApiKey(),
       q: Number(lat) + ',' + Number(lon),
       days: '3',
       aqi: 'no',
@@ -278,7 +291,43 @@
     throw new Error('気象庁・Open-Meteo・WeatherAPI.comから予報を取得できませんでした。' + failures.join(' / '));
   }
 
-  window.__weatherFallback = { getForecast: getForecast };
+  async function getBackupForecast(lat, lon, office) {
+    const key = cacheKey(lat, lon);
+    const failures = [];
+    try {
+      const openMeteo = fromOpenMeteo(await requestJson(makeOpenMeteoUrl(lat, lon), 7500), Object.assign({}, office, { lon: Number(lon) }));
+      if (!validForecast(openMeteo)) throw new Error('Open-Meteoの予報データを検証できません');
+      return saveForecast(key, openMeteo);
+    } catch (error) {
+      failures.push('Open-Meteo: ' + String(error && error.message || error));
+    }
+    try {
+      const weatherApi = fromWeatherApi(await requestJson(makeWeatherApiUrl(lat, lon), 7500), Object.assign({}, office, { lon: Number(lon) }));
+      if (!validForecast(weatherApi)) throw new Error('WeatherAPI.comの予報データを検証できません');
+      return saveForecast(key, weatherApi);
+    } catch (error) {
+      failures.push('WeatherAPI.com: ' + String(error && error.message || error));
+    }
+    const cached = readForecastCache(key);
+    if (cached) {
+      console.warn('予報APIが失敗したため、前回保存データを使用します。', failures);
+      return cached;
+    }
+    throw new Error('Open-Meteo・WeatherAPI.comから予報を取得できず、利用可能な保存データもありません。' + failures.join(' / '));
+  }
+
+  function rememberForecast(lat, lon, forecast, source) {
+    const label = source || ('気象庁 ' + String(forecast && forecast[0] && forecast[0].publishingOffice || '公式予報'));
+    attachMeta(forecast, label, Date.now(), false);
+    return saveForecast(cacheKey(lat, lon), forecast);
+  }
+
+  window.__weatherFallback = {
+    getForecast: getForecast,
+    getBackupForecast: getBackupForecast,
+    rememberForecast: rememberForecast,
+    isValidForecast: validForecast
+  };
 
   // 「履歴を見る」はパネル内だけをスクロールさせ、画面全体のスクロールと分離します。
   const style = document.createElement('style');
