@@ -5,8 +5,8 @@ import fs from 'node:fs/promises';
 const ORIGIN='http://127.0.0.1:4173';
 const FORECAST={
   current:{temperature_2m:18,apparent_temperature:17,relative_humidity_2m:61,weather_code:0,wind_speed_10m:4,time:'2026-10-05T18:00'},
-  hourly:{time:Array.from({length:48},(_,i)=>'2026-10-05T'+String((18+i)%24).padStart(2,'0')+':00'),temperature_2m:Array(48).fill(18),weather_code:Array(48).fill(0),precipitation_probability:Array(48).fill(0)},
-  daily:{time:['2026-10-05','2026-10-06','2026-10-07','2026-10-08','2026-10-09','2026-10-10','2026-10-11'],weather_code:Array(7).fill(0),temperature_2m_max:Array(7).fill(22),temperature_2m_min:Array(7).fill(15),precipitation_probability_max:Array(7).fill(0),sunrise:Array(7).fill('2026-10-05T05:32'),sunset:Array(7).fill('2026-10-05T17:18')}
+  hourly:{time:Array.from({length:48},(_,i)=>'2026-10-05T'+String((18+i)%24).padStart(2,'0')+':00'),temperature_2m:Array(48).fill(18),weather_code:Array(48).fill(0),precipitation:Array(48).fill(0),precipitation_probability:Array(48).fill(0)},
+  daily:{time:['2026-10-05','2026-10-06','2026-10-07','2026-10-08','2026-10-09','2026-10-10','2026-10-11'],weather_code:Array(7).fill(0),temperature_2m_max:Array(7).fill(22),temperature_2m_min:Array(7).fill(15),precipitation_sum:Array(7).fill(0),precipitation_probability_max:Array(7).fill(0),sunrise:Array(7).fill('2026-10-05T05:32'),sunset:Array(7).fill('2026-10-05T17:18')}
 };
 const ZIP={status:200,message:null,results:[{zipcode:'9820032',prefcode:'04',address1:'宮城県',address2:'仙台市太白区',address3:'富沢',kana1:'ミヤギケン',kana2:'センダイシタイハクク',kana3:'トミザワ'}]};
 const GEO={results:[{id:1,name:'仙台市太白区 富沢',latitude:38.209958,longitude:140.860147,country:'日本',country_code:'JP',admin1:'宮城県',admin2:'仙台市太白区'}]};
@@ -17,7 +17,9 @@ const page=await context.newPage();
 const errors=[];
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
-await page.route('https://api.open-meteo.com/v1/forecast**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(FORECAST)}));
+const forecastMock=route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(FORECAST)});
+await page.route('https://api.open-meteo.com/v1/jma**',forecastMock);
+await page.route('https://api.open-meteo.com/v1/forecast**',forecastMock);
 await page.route('https://geocoding-api.open-meteo.com/v1/search**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(GEO)}));
 await page.route('https://zipcloud.ibsnet.co.jp/api/search**',async route=>{
   const cb=new URL(route.request().url()).searchParams.get('callback')||'__noop';
@@ -27,7 +29,7 @@ await page.route('https://zipcloud.ibsnet.co.jp/api/search**',async route=>{
 let completed=0; let failure=null;
 try{
   await page.goto(ORIGIN+'/index.html?weather-test=1000',{waitUntil:'domcontentloaded'});
-  await page.locator('button.clk-controls__btn[aria-label="天気"]').click();
+  await page.evaluate(()=>document.querySelector('button.clk-controls__btn[aria-label="天気"]')?.click());
   const edit=page.locator('.clk-weather__edit-btn');
   const mode=page.locator('.clk-weather__mode-btn');
   const refresh=page.locator('.clk-weather__refresh-btn');

@@ -10,7 +10,7 @@ const FORECAST={
 };
 
 const browser=await chromium.launch({headless:true});
-const context=await browser.newContext({serviceWorkers:'block'});
+const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1440,height:1000}});
 const page=await context.newPage();
 const errors=[];
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
