@@ -10,6 +10,6 @@
     "history_best_code": true
   },
   "browser_errors": [],
-  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:43:12",
-  "timestamp": "2026-10-21T09:25:05.277Z"
+  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:53:12",
+  "timestamp": "2026-10-21T12:06:34.290Z"
 }
