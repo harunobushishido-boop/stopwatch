@@ -79,8 +79,16 @@ try{
   assert.ok(after.maxScroll>0,'history list should have a scroll range');
   assert.ok(after.scrollTop>0,'scrollTop should increase after scrolling');
   assert.ok(after.scrollTop>=after.maxScroll-2,'history list should reach its bottom');
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForTimeout(60);
+  const mobileBefore=await page.evaluate(()=>{const list=document.querySelector('#clkSwHistoryList');list.scrollTop=0;return{overflowY:getComputedStyle(list).overflowY,clientHeight:list.clientHeight,scrollHeight:list.scrollHeight}});
+  assert.ok(['auto','scroll'].includes(mobileBefore.overflowY),'mobile history list must allow scrolling, got '+mobileBefore.overflowY);
+  assert.ok(mobileBefore.clientHeight>0,'mobile history list must have a visible height');
+  assert.ok(mobileBefore.scrollHeight>mobileBefore.clientHeight,'mobile history contents should exceed the viewport');
+  const mobileAfter=await page.evaluate(()=>{const list=document.querySelector('#clkSwHistoryList');list.scrollTop=list.scrollHeight;return{scrollTop:list.scrollTop,maxScroll:list.scrollHeight-list.clientHeight}});
+  assert.ok(mobileAfter.maxScroll>0&&mobileAfter.scrollTop>=mobileAfter.maxScroll-2,'mobile history list should reach its bottom');
   assert.equal(errors.length,0,'page errors: '+errors.join(' | '));
-  report={ok:true,historyRows:before.rows,overflowY:before.overflowY,clientHeight:before.clientHeight,scrollHeight:before.scrollHeight,scrollTopAfter:after.scrollTop,maxScroll:after.maxScroll,browserErrors:errors};
+  report={ok:true,historyRows:before.rows,desktop:{overflowY:before.overflowY,clientHeight:before.clientHeight,scrollHeight:before.scrollHeight,scrollTopAfter:after.scrollTop,maxScroll:after.maxScroll},mobile:{overflowY:mobileBefore.overflowY,clientHeight:mobileBefore.clientHeight,scrollHeight:mobileBefore.scrollHeight,scrollTopAfter:mobileAfter.scrollTop,maxScroll:mobileAfter.maxScroll},browserErrors:errors};
   console.log(JSON.stringify(report));
 }catch(e){
   report={ok:false,error:String(e?.stack||e),browserErrors:errors};
