@@ -2,7 +2,7 @@
   'use strict';
 
   // このキーは公開ページのJavaScriptから読めます。ユーザーの指定により直接埋め込みます。
-  const WEATHERAPI_KEY = '2e70f4d7d7654c3fb22122449262110';
+  const WEATHERAPI_KEY = '';
   const CACHE_PREFIX = 'pc-weather-forecast-v2:';
   const MAX_STALE_MS = 7 * 24 * 60 * 60 * 1000;
   const nativeFetch = window.fetch.bind(window);
