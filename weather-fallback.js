@@ -422,7 +422,7 @@
         return;
       }
       updateStatus();
-      if (String(value).trim()) wxRefresh?.click();
+      if (String(value).trim()) document.querySelector('.clk-weather__refresh-btn')?.click();
     });
     wrap.append(button, status);
     footer.insertBefore(wrap, footer.firstChild || null);
