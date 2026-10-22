@@ -376,9 +376,9 @@
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
     const day = now.getDate();
-    const full = raw.match(/(20\\d{2})\\s*[年/.-]\\s*(\\d{1,2})\\s*[月/.-]\\s*(\\d{1,2})/);
+    const full = raw.match(/(20\d{2})\s*[年/.-]\s*(\d{1,2})\s*[月/.-]\s*(\d{1,2})/);
     if (full) return Number(full[1]) + '-' + String(Number(full[2])).padStart(2, '0') + '-' + String(Number(full[3])).padStart(2, '0');
-    const short = raw.match(/(?:^|\\D)(\\d{1,2})\\s*月?\\s*(?:[月/.-]\\s*)?(\\d{1,2})\\s*日?(?:\\D|$)/);
+    const short = raw.match(/(?:^|\D)(\d{1,2})\s*月?\s*(?:[月/.-]\s*)?(\d{1,2})\s*日?(?:\D|$)/);
     if (short && Number(short[1]) >= 1 && Number(short[1]) <= 12 && Number(short[2]) >= 1 && Number(short[2]) <= 31) {
       return year + '-' + String(Number(short[1])).padStart(2, '0') + '-' + String(Number(short[2])).padStart(2, '0');
     }
