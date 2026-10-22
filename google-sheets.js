@@ -194,7 +194,7 @@
     const id = spreadsheetId(config.spreadsheetUrl);
     if (!id) { setError('スプレッドシートURLが保存されていません。'); return; }
     const history = window.PC_STOPWATCH_HISTORY && window.PC_STOPWATCH_HISTORY.getAll
-      ? window.PC_STOPWATCH_HISTORY.getAll()
+      ? await window.PC_STOPWATCH_HISTORY.getAll()
       : [];
     if (!history.length) { setStatus('送信できるストップウォッチ履歴がまだありません。'); return; }
 
