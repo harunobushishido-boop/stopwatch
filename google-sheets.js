@@ -7,16 +7,20 @@
   let accessToken = '';
   let tokenExpiresAt = 0;
   let tokenClient = null;
-  let syncButton, statusNode, errorNode, clientInput, urlInput, tabInput, connectButton;
+  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton;
 
   const loadConfig = () => {
     try {
       const value = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      return { clientId: String(value.clientId || ''), spreadsheetUrl: String(value.spreadsheetUrl || ''), sheetName: String(value.sheetName || '記録') };
+      return { clientId: configuredClientId(), spreadsheetUrl: String(value.spreadsheetUrl || ''), sheetName: String(value.sheetName || '記録') };
     } catch (error) {
-      return { clientId: '', spreadsheetUrl: '', sheetName: '記録' };
+      return { clientId: configuredClientId(), spreadsheetUrl: '', sheetName: '記録' };
     }
   };
+
+  function configuredClientId() {
+    return String(window.PC_GOOGLE_LOGIN_CONFIG && window.PC_GOOGLE_LOGIN_CONFIG.clientId || '').trim();
+  }
 
   const setStatus = (message) => { if (statusNode) statusNode.textContent = message; };
   const setError = (message) => {
@@ -58,7 +62,7 @@
 
   function readFormConfig() {
     return {
-      clientId: String(clientInput && clientInput.value || '').trim(),
+      clientId: configuredClientId(),
       spreadsheetUrl: String(urlInput && urlInput.value || '').trim(),
       sheetName: String(tabInput && tabInput.value || '').trim() || '記録'
     };
@@ -67,7 +71,7 @@
   function storeConfig() {
     const config = readFormConfig();
     if (!config.clientId.endsWith('.apps.googleusercontent.com')) {
-      setError('Google Cloudで作成したOAuth 2.0のウェブアプリ クライアントIDを入力してください。');
+      setError('Googleログイン用クライアントIDが未設定です。google-login-config.js の設定を確認してください。');
       return false;
     }
     if (!spreadsheetId(config.spreadsheetUrl)) {
@@ -142,7 +146,7 @@
     setError('');
     const config = readFormConfig();
     if (!config.clientId.endsWith('.apps.googleusercontent.com') || !spreadsheetId(config.spreadsheetUrl)) {
-      setError('先にOAuthクライアントIDとスプレッドシートURLを入力し、「設定を保存」を押してください。');
+      setError('Googleログイン用クライアントIDの設定とスプレッドシートURLを確認し、「設定を保存」を押してください。');
       return;
     }
     if (JSON.stringify(config) !== JSON.stringify(loadConfig())) {
@@ -251,16 +255,14 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = '設定したスプレッドシートにストップウォッチ履歴を手動で送信します。スプレッドシートへのアクセスは、Googleの画面から別途許可してください。';
+    note.textContent = 'Googleログイン用のクライアントIDを自動で使います。スプレッドシートのURLを入力し、Googleアカウントでアクセスを許可してください。';
     const fields = document.createElement('div');
     fields.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:10px';
-    const client = makeInput('Google OAuthクライアントID', '例：123...apps.googleusercontent.com', config.clientId);
     const sheet = makeInput('スプレッドシートURLまたはID', 'https://docs.google.com/spreadsheets/d/...', config.spreadsheetUrl);
     const tab = makeInput('シート名', '記録', config.sheetName);
-    clientInput = client.input;
     urlInput = sheet.input;
     tabInput = tab.input;
-    fields.append(client.wrap, sheet.wrap, tab.wrap);
+    fields.append(sheet.wrap, tab.wrap);
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
