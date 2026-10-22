@@ -7,7 +7,7 @@
   let accessToken = '';
   let tokenExpiresAt = 0;
   let tokenClient = null;
-  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton, testButton, testOutput, todayButton;
+  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton, testButton, testOutput;
 
   const loadConfig = () => {
     try {
@@ -369,145 +369,6 @@
     }
   }
 
-
-  function normalizeDateValue(value, now = new Date()) {
-    const raw = String(value == null ? '' : value).trim();
-    if (!raw) return '';
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    const full = raw.match(/(20\d{2})\s*[年/.-]\s*(\d{1,2})\s*[月/.-]\s*(\d{1,2})/);
-    if (full) return Number(full[1]) + '-' + String(Number(full[2])).padStart(2, '0') + '-' + String(Number(full[3])).padStart(2, '0');
-    const short = raw.match(/(?:^|\D)(\d{1,2})\s*月?\s*(?:[月/.-]\s*)?(\d{1,2})\s*日?(?:\D|$)/);
-    if (short && Number(short[1]) >= 1 && Number(short[1]) <= 12 && Number(short[2]) >= 1 && Number(short[2]) <= 31) {
-      return year + '-' + String(Number(short[1])).padStart(2, '0') + '-' + String(Number(short[2])).padStart(2, '0');
-    }
-    return '';
-  }
-
-  function todayKey(date = new Date()) {
-    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
-  }
-
-  function findTodayItems(results, now = new Date()) {
-    const target = todayKey(now);
-    const dateHeader = /日付|日程|実施日|予定日|日にち|年月日|date/i;
-    const items = [];
-    results.forEach((result) => {
-      const rows = result.values || [];
-      if (!rows.length) return;
-      const headers = (rows[0] || []).map((v) => String(v || '').trim());
-      let dateCol = headers.findIndex((h) => dateHeader.test(h));
-      if (dateCol < 0) {
-        const maxCols = Math.max(...rows.map((row) => (row || []).length), 0);
-        for (let col = 0; col < maxCols; col++) {
-          const samples = rows.slice(1, Math.min(rows.length, 12)).map((row) => normalizeDateValue((row || [])[col], now)).filter(Boolean);
-          if (samples.length >= 1) { dateCol = col; break; }
-        }
-      }
-      if (dateCol < 0) return;
-      rows.slice(1).forEach((row) => {
-        if (normalizeDateValue((row || [])[dateCol], now) !== target) return;
-        const values = (row || []).map((v, i) => ({ value: String(v == null ? '' : v).trim(), i }))
-          .filter((entry) => entry.i !== dateCol && entry.value);
-        const itemHeader = /持ち物|忘れ物|持参|持ってくる|準備物|必要なもの|教科書|ノート|筆箱|水筒|給食袋|体操着|上履き|提出物|用意するもの|内容|持参物|備考/i;
-        const itemCols = headers.map((h, i) => itemHeader.test(h) ? i : -1).filter((i) => i !== dateCol && i >= 0);
-        const chosen = itemCols.length
-          ? itemCols.map((i) => String((row || [])[i] == null ? '' : (row || [])[i]).trim()).filter(Boolean)
-          : values.map((entry) => entry.value);
-        chosen.forEach((text) => {
-          if (!items.some((item) => item.text === text && item.sheet === result.title)) items.push({ text, sheet: result.title });
-        });
-      });
-    });
-    return items;
-  }
-
-  function showTodayPacking(items, date = new Date()) {
-    let overlay = document.getElementById('pcTodayPackingOverlay');
-    if (!overlay) {
-      overlay = document.createElement('div');
-      overlay.id = 'pcTodayPackingOverlay';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:#07111f;color:#fff;display:flex;flex-direction:column;padding:clamp(16px,4vw,48px);overflow:auto;font-family:system-ui,"Yu Gothic",sans-serif';
-      document.body.appendChild(overlay);
-    }
-    overlay.replaceChildren();
-    const top = document.createElement('div');
-    top.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap';
-    const heading = document.createElement('div');
-    const title = document.createElement('h1');
-    title.textContent = '今日の持ち物';
-    title.style.cssText = 'font-size:clamp(30px,5vw,64px);font-weight:800;line-height:1.2;margin:0';
-    const dateText = document.createElement('p');
-    dateText.textContent = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-    dateText.style.cssText = 'font-size:clamp(17px,2.5vw,28px);opacity:.8;margin:8px 0 0';
-    heading.append(title, dateText);
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.textContent = '閉じる ✕';
-    close.style.cssText = 'padding:12px 18px;border:1px solid #94a3b8;border-radius:12px;background:#17283e;color:#fff;font-size:16px;font-weight:700;cursor:pointer';
-    close.addEventListener('click', () => overlay.remove());
-    top.append(heading, close);
-    overlay.appendChild(top);
-    const list = document.createElement('div');
-    list.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;margin-top:clamp(24px,5vh,48px)';
-    if (items.length) {
-      items.forEach((item) => {
-        const card = document.createElement('div');
-        card.style.cssText = 'background:#12243a;border:1px solid #2c4561;border-radius:20px;padding:clamp(18px,3vw,32px);font-size:clamp(24px,3.5vw,44px);font-weight:750;line-height:1.4;overflow-wrap:anywhere';
-        card.textContent = '□  ' + item.text;
-        list.appendChild(card);
-      });
-    } else {
-      const empty = document.createElement('div');
-      empty.textContent = '今日の日付に一致する持ち物は見つかりませんでした。';
-      empty.style.cssText = 'grid-column:1/-1;text-align:center;padding:clamp(28px,8vh,90px) 12px;font-size:clamp(22px,3.2vw,40px);font-weight:700;line-height:1.6';
-      list.appendChild(empty);
-    }
-    overlay.appendChild(list);
-    const footer = document.createElement('p');
-    footer.textContent = 'Googleスプレッドシートから読み取りました。内容は変更していません。';
-    footer.style.cssText = 'margin-top:auto;padding-top:28px;text-align:center;font-size:13px;opacity:.65';
-    overlay.appendChild(footer);
-    const esc = (event) => {
-      if (event.key === 'Escape') {
-        overlay.remove();
-        document.removeEventListener('keydown', esc);
-      }
-    };
-    document.addEventListener('keydown', esc);
-  }
-
-  async function runTodayPacking() {
-    setError('');
-    const config = loadConfig();
-    const id = spreadsheetId(config.spreadsheetUrl);
-    const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
-    const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
-    if (!id) { setError('先にスプレッドシートURLを保存してください。'); return; }
-    if (!token || !expiry || Date.now() >= expiry) { setError('先にGoogleアカウントでログインして、アクセスを許可してください。'); return; }
-    accessToken = token;
-    tokenExpiresAt = expiry;
-    todayButton.disabled = true;
-    todayButton.textContent = '今日の持ち物を読み取り中…';
-    try {
-      const meta = await apiRequest(SHEETS_API + encodeURIComponent(id) + '?fields=sheets.properties.title');
-      const sheets = (meta.sheets || []).map((sheet) => sheet.properties && sheet.properties.title).filter(Boolean);
-      const results = [];
-      for (const title of sheets) {
-        const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(escapeSheetName(title) + '!A1:Z200'));
-        results.push({ title, values: (data.values || []).filter((row) => row.some((cell) => String(cell == null ? '' : cell).trim())) });
-      }
-      showTodayPacking(findTodayItems(results), new Date());
-      setStatus('今日の日付に一致する持ち物を大画面に表示しました。');
-    } catch (error) {
-      setError('今日の持ち物を読み取れませんでした。ログイン状態・シートの共有権限を確認してください。詳細：' + (error.message || '不明なエラー'));
-    } finally {
-      todayButton.disabled = false;
-      todayButton.textContent = '今日の持ち物を大画面表示';
-    }
-  }
-
   function installUI() {
     const panes = [...document.querySelectorAll('.clk-panel__pane')];
     const pane = panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
@@ -544,7 +405,7 @@
     syncButton = makeButton('ストップウォッチ履歴を同期');
     syncButton.disabled = true;
     testButton = makeButton('忘れ物防止テスト', true);
-    todayButton = makeButton('今日の持ち物を大画面表示', true);\n    actions.append(saveButton, connectButton, syncButton, testButton, todayButton);
+    actions.append(saveButton, connectButton, syncButton, testButton);
     testOutput = document.createElement('div');
     testOutput.id = 'pcPackingTestOutput';
     testOutput.style.cssText = 'margin-top:12px;min-width:0';
@@ -565,7 +426,7 @@
     saveButton.addEventListener('click', storeConfig);
     connectButton.addEventListener('click', connect);
     syncButton.addEventListener('click', syncHistory);
-    testButton.addEventListener('click', runPackingTest);\n    todayButton.addEventListener('click', runTodayPacking);
+    testButton.addEventListener('click', runPackingTest);
     if (config.clientId && spreadsheetId(config.spreadsheetUrl)) setStatus('設定を読み込みました。接続してから同期してください。');
     window.PC_SHEETS = {
       connect,
