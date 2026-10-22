@@ -1,16 +1,18 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 9738,
-  "forecast_requests": 426,
+  "elapsed_ms": 10265,
+  "forecast_requests": 300,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
     "refresh_weather": true,
     "zip_search": true
   },
-  "browser_errors": [],
-  "failure": null,
-  "timestamp": "2026-10-21T12:00:21.938Z"
+  "browser_errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (File not found)"
+  ],
+  "failure": "AssertionError [ERR_ASSERTION]: browser errors: console: Failed to load resource: the server responded with a status of 404 (File not found)\n\n1 !== 0\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:80:10",
+  "timestamp": "2026-10-22T07:02:50.910Z"
 }
