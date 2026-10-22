@@ -157,24 +157,18 @@
     connectButton.textContent = 'Googleに接続中…';
     try {
       await loadGoogleIdentity();
-      await new Promise((resolve, reject) => {
-        tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: config.clientId,
-          scope: TOKEN_SCOPE,
-          callback: (response) => {
-            if (response && response.access_token) {
-              accessToken = response.access_token;
-              tokenExpiresAt = Date.now() + Math.max(60, Number(response.expires_in || 3600) - 60) * 1000;
-              resolve();
-            } else {
-              reject(new Error(response && response.error_description || response && response.error || 'Googleからアクセス許可を取得できませんでした。'));
-            }
-          },
-          error_callback: (error) => reject(new Error(error && error.message || 'Googleの認証画面を開けませんでした。'))
-        });
-        tokenClient.requestAccessToken({ prompt: 'consent' });
-      });
-      setStatus('Googleスプレッドシートへのアクセスが許可されました。次に「ストップウォッチ履歴を同期」を押してください。');
+      const sharedToken = window.PC_AUTH && window.PC_AUTH.getAccessToken
+        ? window.PC_AUTH.getAccessToken()
+        : '';
+      const sharedExpiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt
+        ? Number(window.PC_AUTH.getAccessTokenExpiresAt())
+        : 0;
+      if (!sharedToken || !sharedExpiry || Date.now() >= sharedExpiry) {
+        throw new Error('先に「Googleアカウントでログインしてアクセスを許可」を押してください。ログイン時にスプレッドシートの権限もまとめて許可できます。');
+      }
+      accessToken = sharedToken;
+      tokenExpiresAt = sharedExpiry;
+      setStatus('Googleログイン時に許可されたアクセス権を利用できます。「ストップウォッチ履歴を同期」を押してください。');
       syncButton.disabled = false;
     } catch (error) {
       setError(error.message || 'Googleに接続できませんでした。OAuthクライアントIDと承認済みドメインを確認してください。');
@@ -255,7 +249,7 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Googleログイン用のクライアントIDを自動で使います。スプレッドシートのURLを入力し、Googleアカウントでアクセスを許可してください。';
+    note.textContent = 'スプレッドシートのURLを保存後、Googleアカウント欄からログインしてください。ログイン時に許可したアクセス権をこの連携で利用します。';
     const fields = document.createElement('div');
     fields.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:10px';
     const sheet = makeInput('スプレッドシートURLまたはID', 'https://docs.google.com/spreadsheets/d/...', config.spreadsheetUrl);
