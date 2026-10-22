@@ -316,6 +316,71 @@
     throw new Error('Open-Meteo・WeatherAPI.comから予報を取得できず、利用可能な保存データもありません。' + failures.join(' / '));
   }
 
+  async function enrichWithHourlyForecast(lat, lon, office, forecast) {
+    if (!Array.isArray(forecast) || !forecast.length || !forecast[0] || !Array.isArray(forecast[0].timeSeries)) return forecast;
+    const currentSource = String(forecast.__source || '');
+    // Open-Meteo / WeatherAPI の fallback データには既に時間別の系列があります。
+    if (/Open-Meteo|WeatherAPI\.com/.test(currentSource) || forecast.__stale) return forecast;
+
+    const key = cacheKey(lat, lon);
+    const failures = [];
+    const providers = [
+      {
+        name: 'Open-Meteo',
+        load: async function () {
+          return fromOpenMeteo(
+            await requestJson(makeOpenMeteoUrl(lat, lon), 7500),
+            Object.assign({}, office, { lon: Number(lon) })
+          );
+        }
+      },
+      {
+        name: 'WeatherAPI.com',
+        load: async function () {
+          return fromWeatherApi(
+            await requestJson(makeWeatherApiUrl(lat, lon), 7500),
+            Object.assign({}, office, { lon: Number(lon) })
+          );
+        }
+      }
+    ];
+
+    for (const provider of providers) {
+      try {
+        const supplemental = await provider.load();
+        const series = supplemental && supplemental[0] && supplemental[0].timeSeries;
+        if (!Array.isArray(series)) throw new Error('時間別予報がありません');
+        const weather = series.find(function (ts) { return ts.areas && ts.areas.some(function (a) { return Array.isArray(a.weatherCodes); }); });
+        const pops = series.find(function (ts) { return ts.areas && ts.areas.some(function (a) { return Array.isArray(a.pops); }); });
+        const temps = series.find(function (ts) { return ts.areas && ts.areas.some(function (a) { return Array.isArray(a.temps); }); });
+        if (!weather || !pops || !temps ||
+            !Array.isArray(weather.timeDefines) || weather.timeDefines.length < 4 ||
+            !Array.isArray(pops.timeDefines) || !Array.isArray(temps.timeDefines)) {
+          throw new Error('時間別の天気・降水確率・気温がそろっていません');
+        }
+
+        const base = forecast[0];
+        const existing = Array.isArray(base.timeSeries) ? base.timeSeries : [];
+        const isWeatherSeries = function (ts) { return ts && ts.areas && ts.areas.some(function (a) { return Array.isArray(a.weatherCodes); }); };
+        const isPopSeries = function (ts) { return ts && ts.areas && ts.areas.some(function (a) { return Array.isArray(a.pops); }); };
+        const isTempSeries = function (ts) { return ts && ts.areas && ts.areas.some(function (a) { return Array.isArray(a.temps); }); };
+        // 時間別系列を先頭に置き、既存の描画処理がより細かい時刻を使えるようにします。
+        base.timeSeries = [weather, pops, temps].concat(existing.filter(function (ts) {
+          return !isWeatherSeries(ts) && !isPopSeries(ts) && !isTempSeries(ts);
+        }));
+        forecast.__source = '気象庁（地域・週間予報）＋' + provider.name + '（時間別予報）';
+        forecast.__fetchedAt = Date.now();
+        forecast.__stale = false;
+        return saveForecast(key, forecast);
+      } catch (error) {
+        failures.push(provider.name + ': ' + String(error && error.message || error));
+      }
+    }
+
+    if (failures.length) console.warn('時間別予報の補完に失敗しました。気象庁の通常予報を表示します。', failures);
+    return forecast;
+  }
+
   function rememberForecast(lat, lon, forecast, source) {
     const label = source || ('気象庁 ' + String(forecast && forecast[0] && forecast[0].publishingOffice || '公式予報'));
     attachMeta(forecast, label, Date.now(), false);
@@ -325,6 +390,7 @@
   window.__weatherFallback = {
     getForecast: getForecast,
     getBackupForecast: getBackupForecast,
+    enrichWithHourlyForecast: enrichWithHourlyForecast,
     rememberForecast: rememberForecast,
     isValidForecast: validForecast
   };
