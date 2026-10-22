@@ -10,3 +10,12 @@ GitHub Pagesでそのまま公開できる静的Webアプリです。
 - BGM・背景・PWA対応
 
 GitHub Pagesではリポジトリのルートを公開対象にしてください。
+
+
+## 天気予報・Google連携
+
+- 天気予報：気象庁の地域・週間予報に加え、Open-Meteoで時間別予報を補完します。取得に失敗した場合はWeatherAPI.comや最後に保存した予報へ切り替えます。
+- WeatherAPI.com：天気パネル内の「WeatherAPI.com のキーを設定」から、このブラウザーにキーを保存できます。キーはソースコードに埋め込みません。
+- Googleアカウントログイン：Firebase Authenticationの設定が必要です。手順は [Google連携の初期設定ガイド](./GOOGLE_LOGIN_SETUP.md) を参照してください。
+- Googleスプレッドシート：設定パネルでOAuthクライアントID、スプレッドシートURL、シート名を設定すると、ストップウォッチ履歴を手動で同期できます。Google Sheets APIを有効にする必要があります。
+- Googleへの連携は、設定とユーザーの明示的なアクセス許可が完了するまで有効になりません。
