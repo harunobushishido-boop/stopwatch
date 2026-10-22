@@ -12,7 +12,7 @@
   let accessToken = '';
   let accessTokenExpiresAt = 0;
   let tokenClient = null;
-  const AUTH_SCOPES = 'openid email profile https://www.googleapis.com/auth/spreadsheets';
+  const AUTH_SCOPES = 'openid email profile https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
   let container = null;
   let statusNode = null;
   let profileNode = null;
@@ -251,7 +251,7 @@
     title.textContent = 'Googleアカウント';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Googleログイン時に、アカウント情報とスプレッドシートへのアクセス権限をまとめてGoogle公式画面で確認・許可します。';
+    note.textContent = 'Googleログイン時に、アカウント情報・スプレッドシート連携・このアプリで使用する特定のGoogleドライブファイルへのアクセス権限を、Google公式画面で確認・許可します。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:8px 0;font-size:12.5px;line-height:1.5';
     profileNode = document.createElement('div');
