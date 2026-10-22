@@ -373,7 +373,10 @@
       }
     }
 
-    if (failures.length) console.warn('時間別予報の補完に失敗しました。気象庁の通常予報を表示します。', failures);
+    if (failures.length) {
+      forecast.__source = '気象庁（地域・週間予報）／時間別予報の補完に失敗';
+      console.warn('時間別予報の補完に失敗しました。気象庁の通常予報を表示します。', failures);
+    }
     return forecast;
   }
 
