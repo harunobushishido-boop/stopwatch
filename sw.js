@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'benri-timer-v38';
+const CACHE_NAME = 'benri-timer-v39';
 const APP_SHELL = ['./', './index.html', './weather-fallback.js', './firebase-config.js', './google-auth.js', './google-sheets.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(APP_SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim())));
@@ -12,6 +12,14 @@ self.addEventListener('fetch', e => {
   if (r.mode === 'navigate') {
     e.respondWith(fetch(r).then(res => { if (res.ok) { const c = res.clone(); caches.open(CACHE_NAME).then(x => x.put('./index.html', c)).catch(() => {}); } return res; })
       .catch(async () => (await caches.match(r)) || (await caches.match('./index.html'))));
+    return;
+  }
+  // Keep configuration and first-party JavaScript current after GitHub Pages deployments.
+  if (/\/(?:weather-fallback|firebase-config|google-auth|google-sheets)\.js$/i.test(url.pathname)) {
+    e.respondWith(fetch(r).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE_NAME).then(c => c.put(r, copy)).catch(() => {}); }
+      return res;
+    }).catch(async () => (await caches.match(r)) || Response.error()));
     return;
   }
   e.respondWith(caches.match(r).then(c => c || fetch(r).then(res => { if (res.ok) { const k = res.clone(); caches.open(CACHE_NAME).then(x => x.put(r, k)).catch(() => {}); } return res; })));
