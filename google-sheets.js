@@ -7,7 +7,7 @@
   let accessToken = '';
   let tokenExpiresAt = 0;
   let tokenClient = null;
-  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton;
+  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton, testButton, testOutput;
 
   const loadConfig = () => {
     try {
@@ -234,6 +234,141 @@
     }
   }
 
+  function escapeSheetName(name) {
+    return "'" + String(name || '').replace(/'/g, "''") + "'";
+  }
+
+  function renderPackingTest(results) {
+    if (!testOutput) return;
+    testOutput.replaceChildren();
+    const title = document.createElement('h3');
+    title.textContent = '読み取り結果';
+    title.style.cssText = 'font-size:14px;margin:0 0 8px';
+    testOutput.appendChild(title);
+
+    const allRows = [];
+    for (const result of results) {
+      const section = document.createElement('section');
+      section.style.cssText = 'margin:12px 0;padding:10px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:10px';
+      const heading = document.createElement('h4');
+      heading.textContent = result.title;
+      heading.style.cssText = 'font-size:13px;margin:0 0 8px';
+      section.appendChild(heading);
+      const rows = result.values || [];
+      if (!rows.length) {
+        const empty = document.createElement('p');
+        empty.textContent = 'このシートに表示できるデータはありません。';
+        empty.style.cssText = 'font-size:12px;opacity:.7;margin:0';
+        section.appendChild(empty);
+      } else {
+        const tableWrap = document.createElement('div');
+        tableWrap.style.cssText = 'max-width:100%;overflow:auto';
+        const table = document.createElement('table');
+        table.style.cssText = 'border-collapse:collapse;width:100%;font-size:12px';
+        rows.forEach((row, index) => {
+          const tr = document.createElement('tr');
+          (row || []).forEach((cell) => {
+            const td = document.createElement(index === 0 ? 'th' : 'td');
+            td.textContent = String(cell == null ? '' : cell);
+            td.style.cssText = 'padding:7px 8px;border:1px solid var(--clk-border,rgba(127,127,127,.2));text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;vertical-align:top';
+            if (index === 0) td.style.fontWeight = '700';
+            tr.appendChild(td);
+          });
+          if (tr.children.length) table.appendChild(tr);
+          if (row && row.some((cell) => String(cell || '').trim())) allRows.push({ sheet: result.title, row });
+        });
+        tableWrap.appendChild(table);
+        section.appendChild(tableWrap);
+      }
+      testOutput.appendChild(section);
+    }
+
+    const itemTerms = /持ち物|忘れ物|持参|持ってくる|準備物|必要なもの|教科書|ノート|筆箱|水筒|給食袋|体操着|上履き|提出物|用意するもの/i;
+    const itemLines = [];
+    for (const result of results) {
+      const rows = result.values || [];
+      if (!rows.length) continue;
+      const headers = (rows[0] || []).map((v) => String(v || '').trim());
+      const itemCols = headers.map((h, i) => itemTerms.test(h) ? i : -1).filter((i) => i >= 0);
+      if (itemCols.length) {
+        rows.slice(1).forEach((row) => itemCols.forEach((col) => {
+          const value = String((row || [])[col] || '').trim();
+          if (value && !itemLines.some((entry) => entry.text === value && entry.sheet === result.title)) {
+            itemLines.push({ sheet: result.title, text: value });
+          }
+        }));
+      }
+    }
+    const itemsSection = document.createElement('section');
+    itemsSection.style.cssText = 'margin-top:12px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:10px';
+    const itemsTitle = document.createElement('h3');
+    itemsTitle.textContent = '持ち物候補';
+    itemsTitle.style.cssText = 'font-size:14px;margin:0 0 8px';
+    itemsSection.appendChild(itemsTitle);
+    if (itemLines.length) {
+      const list = document.createElement('ul');
+      list.style.cssText = 'padding-left:20px;margin:0;line-height:1.8;font-size:13px';
+      itemLines.forEach((item) => {
+        const li = document.createElement('li');
+        li.textContent = item.text + '（' + item.sheet + '）';
+        list.appendChild(li);
+      });
+      itemsSection.appendChild(list);
+    } else {
+      const note = document.createElement('p');
+      note.textContent = '持ち物用の列名を自動判定できませんでした。上の読み取り結果を表示しています。表の列名に「持ち物」「準備物」「持参」などがあると、持ち物候補を自動抽出できます。';
+      note.style.cssText = 'font-size:12px;line-height:1.6;opacity:.75;margin:0';
+      itemsSection.appendChild(note);
+    }
+    testOutput.appendChild(itemsSection);
+    const count = document.createElement('p');
+    count.textContent = '読み取り完了：' + results.length + 'シート / ' + allRows.length + '行。スプレッドシートは変更していません。';
+    count.style.cssText = 'font-size:11px;opacity:.7;margin:10px 0 0';
+    testOutput.appendChild(count);
+  }
+
+  async function runPackingTest() {
+    setError('');
+    const config = loadConfig();
+    const id = spreadsheetId(config.spreadsheetUrl);
+    const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
+    const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
+    if (!id) {
+      setError('先にスプレッドシートURLを保存してください。');
+      return;
+    }
+    if (!token || !expiry || Date.now() >= expiry) {
+      setError('先にGoogleアカウントでログインして、アクセスを許可してください。');
+      return;
+    }
+    accessToken = token;
+    tokenExpiresAt = expiry;
+    testButton.disabled = true;
+    testButton.textContent = '持ち物を読み取り中…';
+    setStatus('スプレッドシートの情報を読み取っています。');
+    if (testOutput) testOutput.replaceChildren();
+    try {
+      const meta = await apiRequest(SHEETS_API + encodeURIComponent(id) + '?fields=properties.title,sheets.properties.title');
+      const sheets = (meta.sheets || []).map((sheet) => sheet.properties && sheet.properties.title).filter(Boolean);
+      if (!sheets.length) throw new Error('読み取れるシートが見つかりませんでした。');
+      const results = [];
+      for (const title of sheets) {
+        const range = escapeSheetName(title) + '!A1:Z200';
+        const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
+        results.push({ title, values: (data.values || []).filter((row) => row.some((cell) => String(cell == null ? '' : cell).trim())) });
+      }
+      renderPackingTest(results);
+      setStatus('テスト成功：スプレッドシートの内容を読み取り、表示しました。');
+    } catch (error) {
+      setError('持ち物テストに失敗しました。URL・共有権限・Google Sheets APIの設定を確認してください。詳細：' + (error.message || '不明なエラー'));
+      setStatus('テストに失敗しました');
+      console.error('Packing reminder test failed', error);
+    } finally {
+      testButton.disabled = false;
+      testButton.textContent = '忘れ物防止テスト';
+    }
+  }
+
   function installUI() {
     const panes = [...document.querySelectorAll('.clk-panel__pane')];
     const pane = panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
@@ -269,7 +404,11 @@
     connectButton = makeButton('Googleスプレッドシートに接続', true);
     syncButton = makeButton('ストップウォッチ履歴を同期');
     syncButton.disabled = true;
-    actions.append(saveButton, connectButton, syncButton);
+    testButton = makeButton('忘れ物防止テスト', true);
+    actions.append(saveButton, connectButton, syncButton, testButton);
+    testOutput = document.createElement('div');
+    testOutput.id = 'pcPackingTestOutput';
+    testOutput.style.cssText = 'margin-top:12px;min-width:0';
     const guide = document.createElement('a');
     guide.href = 'https://github.com/harunobushishido-boop/stopwatch/blob/main/GOOGLE_LOGIN_SETUP.md';
     guide.target = '_blank';
@@ -280,13 +419,14 @@
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
     foot.textContent = '選択したスプレッドシートを読み、未登録の記録を末尾に追加します。既存の行は上書き・削除しません。アクセストークンはページを閉じるまでメモリ内にだけ保持します。';
-    group.append(title, note, fields, statusNode, errorNode, actions, guide, foot);
+    group.append(title, note, fields, statusNode, errorNode, actions, testOutput, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
     saveButton.addEventListener('click', storeConfig);
     connectButton.addEventListener('click', connect);
     syncButton.addEventListener('click', syncHistory);
+    testButton.addEventListener('click', runPackingTest);
     if (config.clientId && spreadsheetId(config.spreadsheetUrl)) setStatus('設定を読み込みました。接続してから同期してください。');
     window.PC_SHEETS = {
       connect,
