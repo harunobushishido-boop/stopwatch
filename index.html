@@ -634,7 +634,7 @@ async function wx(lat,lon,name){
   });
   const source=$('.clk-weather__source-note',wp);if(source){const savedAt=forecast.__stale&&forecast.__fetchedAt?'／保存日時：'+new Date(forecast.__fetchedAt).toLocaleString('ja-JP',{hour12:false})+'（保存済みデータ）':'';source.textContent='予報・現在値：Open-Meteo（時間別・7日間）'+savedAt;}
   $$('.clk-weather-inline').forEach(b=>{b.querySelector('.clk-weather-inline__icon').innerHTML='<span>'+currentWeather[1]+'</span>';b.querySelector('.clk-weather-inline__temp').textContent=current.temp!==''&&Number.isFinite(Number(current.temp))?Math.round(Number(current.temp))+'°':'—';b.title=b.ariaLabel='Open-Meteoの天気予報を開く — '+name;b.onclick=e=>{e.stopPropagation();open(4)};b.style.display=S.wxi?'':'none'});
-  W={lat,lon,name};wp.dataset.weatherLat=String(lat);wp.dataset.weatherLon=String(lon);wp.dataset.weatherName=name;wp.dataset.weatherOffice=office.code;lastWxUpdate=Date.now();if(rbt)rbt.textContent='更新したばかり';wxRefresh?.setAttribute('aria-busy','false');
+  W={lat,lon,name};wp.dataset.weatherLat=String(lat);wp.dataset.weatherLon=String(lon);wp.dataset.weatherName=name;lastWxUpdate=Date.now();if(rbt)rbt.textContent='更新したばかり';wxRefresh?.setAttribute('aria-busy','false');
  }catch(e){if(call===wxRequest){$('.clk-weather__loc-name',wp).textContent='天気予報データを取得できませんでした';if(rbt)rbt.textContent='再取得';wxRefresh?.setAttribute('aria-busy','false');const source=$('.clk-weather__source-note',wp);if(source)source.textContent='Open-Meteoから予報を取得できませんでした。通信状態を確認して再取得してください。';console.warn('Open-Meteo weather fetch failed',e)}}
  finally{wxBusy=false}
 }
