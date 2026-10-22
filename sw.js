@@ -15,7 +15,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   // Keep the weather fallback script current after GitHub Pages deployments.
-  if (/\\/weather-fallback\\.js$/i.test(url.pathname)) {
+  if (/\/weather-fallback\.js$/i.test(url.pathname)) {
     e.respondWith(fetch(r).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE_NAME).then(c => c.put(r, copy)).catch(() => {}); }
       return res;
