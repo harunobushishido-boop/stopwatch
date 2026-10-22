@@ -595,8 +595,8 @@ async function wx(lat,lon,name){
   const wwx=weekly.timeSeries.find(ts=>Array.isArray(ts.timeDefines)&&ts.areas?.some(a=>Array.isArray(a.weatherCodes)));
   const wtemp=weekly.timeSeries.find(ts=>Array.isArray(ts.timeDefines)&&ts.areas?.some(a=>Array.isArray(a.tempsMin)||Array.isArray(a.tempsMax)));
   if(!swx||!spop||!wwx)throw new Error('気象庁の予報項目が見つかりません');
-  const shortArea=jmaRegionArea(swx.areas,office,lon),popArea=jmaRegionArea(spop.areas,office,lon)||shortArea,weeklyArea=jmaRegionArea(wwx.areas,office,lon)||shortArea;
-  const tempArea=stemp?.areas?.find(a=>a.area?.name===office.label)||stemp?.areas?.[0]||null,weekTempArea=wtemp?.areas?.find(a=>a.area?.name===office.label)||wtemp?.areas?.[0]||null;
+  const shortArea=swx.areas?.[0]||null,popArea=spop.areas?.[0]||shortArea,weeklyArea=wwx.areas?.[0]||shortArea;
+  const tempArea=stemp?.areas?.[0]||null,weekTempArea=wtemp?.areas?.[0]||null;
   const nowMs=Date.now(),today=tokyoDateKey(new Date()),tomorrow=tokyoDateKey(new Date(nowMs+86400000));
   const timeCode=iso=>{const target=Date.parse(iso);let idx=-1;for(let i=0;i<(swx.timeDefines||[]).length;i++){if(Date.parse(swx.timeDefines[i])<=target)idx=i;else break}if(idx<0)idx=0;return shortArea?.weatherCodes?.[idx]??shortArea?.weatherCodes?.[0]??null};
   const currentIso=(swx.timeDefines||[]).filter(x=>Date.parse(x)<=nowMs).slice(-1)[0]||(swx.timeDefines||[])[0],currentCode=currentIso?timeCode(currentIso):null;
