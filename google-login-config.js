@@ -4,5 +4,5 @@
  * Never put a client secret or service-account private key in this file.
  */
 window.PC_GOOGLE_LOGIN_CONFIG = Object.freeze({
-  clientId: "PASTE_YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com"
+  clientId: "325537994907-11jgej14dkc5oflhvsit73s744313oa9.apps.googleusercontent.com"
 });
