@@ -231,15 +231,11 @@
   }
 
   function getWeatherApiKey() {
-    let key = '';
-    try { key = String(localStorage.getItem('pc-weatherapi-key') || '').trim(); } catch (error) {}
-    if (!key && typeof window.prompt === 'function') {
-      key = String(window.prompt('WeatherAPI.com のAPIキーを入力してください。入力したキーはこのブラウザー内に保存されます。') || '').trim();
-      if (key) {
-        try { localStorage.setItem('pc-weatherapi-key', key); } catch (error) {}
-      }
-    }
-    if (!key) throw new Error('WeatherAPI.comのAPIキーが設定されていません');
+    let key = WEATHERAPI_KEY;
+    try {
+      if (!key) key = String(localStorage.getItem('pc-weatherapi-key') || '').trim();
+    } catch (error) {}
+    if (!key) throw new Error('WeatherAPI.comのAPIキーが未設定です。天気パネルの設定ボタンから登録してください。');
     return key;
   }
 
@@ -394,6 +390,49 @@
     rememberForecast: rememberForecast,
     isValidForecast: validForecast
   };
+
+  function installWeatherApiKeyControl() {
+    const footer = document.querySelector('.clk-weather__footer');
+    if (!footer || document.getElementById('pcWeatherApiKeyButton')) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px';
+    const button = document.createElement('button');
+    button.id = 'pcWeatherApiKeyButton';
+    button.type = 'button';
+    button.textContent = 'WeatherAPI.com のキーを設定';
+    button.style.cssText = 'align-self:flex-start;padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
+    const status = document.createElement('span');
+    status.id = 'pcWeatherApiKeyStatus';
+    status.style.cssText = 'font-size:11px;opacity:.75';
+    const updateStatus = () => {
+      let saved = '';
+      try { saved = String(localStorage.getItem('pc-weatherapi-key') || '').trim(); } catch (error) {}
+      status.textContent = saved ? 'このブラウザーにキーを保存済み' : '未設定（他のAPIが失敗した場合のみ使用）';
+    };
+    button.addEventListener('click', () => {
+      let previous = '';
+      try { previous = String(localStorage.getItem('pc-weatherapi-key') || ''); } catch (error) {}
+      const value = window.prompt('WeatherAPI.comのAPIキーを入力してください。この端末のブラウザー内に保存されます。キーはサイトのコードには書き込みません。空欄で保存済みキーを削除できます。', previous);
+      if (value === null) return;
+      try {
+        if (String(value).trim()) localStorage.setItem('pc-weatherapi-key', String(value).trim());
+        else localStorage.removeItem('pc-weatherapi-key');
+      } catch (error) {
+        window.alert('このブラウザーにキーを保存できませんでした。');
+        return;
+      }
+      updateStatus();
+      if (String(value).trim()) wxRefresh?.click();
+    });
+    wrap.append(button, status);
+    footer.insertBefore(wrap, footer.firstChild || null);
+    updateStatus();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installWeatherApiKeyControl, { once: true });
+  } else {
+    installWeatherApiKeyControl();
+  }
 
   // 「履歴を見る」はパネル内だけをスクロールさせ、画面全体のスクロールと分離します。
   const style = document.createElement('style');
