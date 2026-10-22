@@ -251,6 +251,7 @@ const r=$('.clk-row__time',stB).children;r[0].textContent=hh;r[2].textContent=P(
 /* ストップウォッチ */
 let run=0,base=0,t0=0,laps=[],swSessionId=null,swSessionAt=0;try{const o=JSON.parse(localStorage.getItem('pcsw'));if(o&&typeof o.base==='number'){base=o.base;t0=o.t0||0;laps=Array.isArray(o.laps)?o.laps:[];run=o.run?1:0;swSessionId=typeof o.swSessionId==='string'?o.swSessionId:null;swSessionAt=Number.isFinite(o.swSessionAt)?o.swSessionAt:0}}catch(e){}
 let swHistory=[];try{const h=JSON.parse(localStorage.getItem('pcswHistory'));if(Array.isArray(h))swHistory=h.filter(x=>x&&typeof x.id==='string'&&Number.isFinite(x.at)&&Number.isFinite(x.elapsed)&&x.elapsed>0&&Array.isArray(x.laps)).map(x=>({id:x.id,at:x.at,elapsed:x.elapsed,laps:x.laps.filter(v=>Number.isFinite(v)&&v>=0&&v<=x.elapsed)})).sort((a,b)=>b.at-a.at)}catch(e){}
+window.PC_STOPWATCH_HISTORY={getAll:()=>swHistory.map(r=>({id:r.id,at:r.at,elapsed:r.elapsed,laps:r.laps.slice()}))};
 const swHistoryLegacy=swHistory.slice();let swHistoryDbPromise=null,swHistoryQueue=Promise.resolve(),swHistoryReady=Promise.resolve(),swHistoryVersion=0,swHistoryClearedDuringInit=false;
 function swHistoryOpen(){if(!('indexedDB'in window))return Promise.reject(new Error('IndexedDB unavailable'));if(swHistoryDbPromise)return swHistoryDbPromise;swHistoryDbPromise=new Promise((resolve,reject)=>{const req=indexedDB.open('pcsw-history',1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('sessions'))db.createObjectStore('sessions',{keyPath:'id'})};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('IndexedDB open failed'))});return swHistoryDbPromise}
 function swHistoryMerge(records){const byId=new Map();for(const r of records)if(r&&typeof r.id==='string'&&Number.isFinite(r.at)&&Number.isFinite(r.elapsed)&&r.elapsed>0&&Array.isArray(r.laps))byId.set(r.id,{id:r.id,at:r.at,elapsed:r.elapsed,laps:r.laps.filter(v=>Number.isFinite(v)&&v>=0&&v<=r.elapsed)});return [...byId.values()].sort((a,b)=>b.at-a.at)}
@@ -625,6 +626,12 @@ async function wx(lat,lon,name){
    forecast=await window.__weatherFallback.getBackupForecast(lat,lon,office);
   }
   if(!Array.isArray(forecast)||!forecast[0]?.timeSeries)throw new Error('天気予報データの形式が正しくありません');
+  if(!forecast.__stale&&window.__weatherFallback?.enrichWithHourlyForecast){
+   forecast=await window.__weatherFallback.enrichWithHourlyForecast(lat,lon,office,forecast);
+  }
+  if(!forecast.__stale&&window.__weatherFallback?.rememberForecast){
+   window.__weatherFallback.rememberForecast(lat,lon,forecast,forecast.__source);
+  }
   if(call!==wxRequest)return;
   const short=forecast[0],weekly=forecast.find((x,i)=>i>0&&Array.isArray(x.timeSeries)&&x.timeSeries.length>0)||forecast[forecast.length-1];
   const swx=short.timeSeries.find(ts=>Array.isArray(ts.timeDefines)&&ts.areas?.some(a=>Array.isArray(a.weatherCodes)));
@@ -1354,4 +1361,4 @@ if(!install()){
  .gh-ta-card strong{font-size:14px}
  .gh-ta-section{padding:10px}
 }
-</style></body></html>
+</style><script src="./firebase-config.js?v=1"></script><script type="module" src="./google-auth.js?v=1"></script><script type="module" src="./google-sheets.js?v=1"></script></body></html>
