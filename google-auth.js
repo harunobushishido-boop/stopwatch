@@ -54,9 +54,10 @@ import {
 
   function renderUser(user) {
     currentUser = user || null;
-    if (window.PC_AUTH) {
-      window.PC_AUTH.currentUser = currentUser;
-      window.PC_AUTH.enabled = Boolean(auth);
+    if (window.PC_AUTH && Object.prototype.hasOwnProperty.call(window.PC_AUTH, 'currentUser')) {
+      const descriptor = Object.getOwnPropertyDescriptor(window.PC_AUTH, 'currentUser');
+      if (descriptor && descriptor.writable) window.PC_AUTH.currentUser = currentUser;
+      if (descriptor && descriptor.get && !auth) window.PC_AUTH.enabled = false;
     }
     if (profileNode) {
       profileNode.replaceChildren();
