@@ -1,9 +1,9 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 7114,
-  "forecast_requests": 266,
+  "elapsed_ms": 10077,
+  "forecast_requests": 0,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
@@ -11,6 +11,6 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": null,
-  "timestamp": "2026-10-22T07:09:30.523Z"
+  "failure": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert.ok(forecastRequests>0)\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:81:10",
+  "timestamp": "2026-10-22T08:03:59.273Z"
 }
