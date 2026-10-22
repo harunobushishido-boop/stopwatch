@@ -9,6 +9,10 @@
 
   let currentUser = null;
   let googleIdTokenSeen = false;
+  let accessToken = '';
+  let accessTokenExpiresAt = 0;
+  let tokenClient = null;
+  const AUTH_SCOPES = 'openid email profile https://www.googleapis.com/auth/spreadsheets';
   let container = null;
   let statusNode = null;
   let profileNode = null;
@@ -70,7 +74,7 @@
         email.style.cssText = 'font-size:12px;opacity:.75;overflow-wrap:anywhere';
         details.append(name, email);
         profileNode.appendChild(details);
-        setStatus('Googleアカウントでログイン中（このページ内）');
+        setStatus(accessToken && Date.now() < accessTokenExpiresAt ? 'Googleログイン済み・スプレッドシートへのアクセス許可済み' : 'Googleログイン中。アクセス許可を再取得してください。');
         if (signOutButton) signOutButton.hidden = false;
       } else {
         setStatus(configured ? 'Googleアカウントにログインしていません' : '初期設定が必要です');
@@ -85,9 +89,13 @@
       // GIS sends an ID token directly to this page. A server must verify its signature
       // before using it for protected resources or permissions.
       frontendOnly: true,
+      getAccessToken: () => accessToken && Date.now() < accessTokenExpiresAt ? accessToken : '',
+      getAccessTokenExpiresAt: () => accessTokenExpiresAt,
       signOut: () => {
         currentUser = null;
         googleIdTokenSeen = false;
+        accessToken = '';
+        accessTokenExpiresAt = 0;
         try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
         try { window.google?.accounts?.id?.cancel(); } catch (error) {}
         publishState(null);
@@ -161,25 +169,68 @@
     try {
       await loadGIS();
       if (!container.isConnected) return;
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-        auto_select: false,
-        cancel_on_tap_outside: true,
-        context: 'signin',
-        itp_support: true
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+      button.style.cssText = 'padding:10px 14px;border:1px solid #4285f4;border-radius:9px;background:#4285f4;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer';
+      button.addEventListener('click', () => {
+        setError('');
+        button.disabled = true;
+        button.textContent = 'Googleに接続中…';
+        try {
+          tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: AUTH_SCOPES,
+            callback: async (response) => {
+              try {
+                if (!response || !response.access_token) {
+                  throw new Error(response && (response.error_description || response.error) || 'Googleからアクセス許可を取得できませんでした。');
+                }
+                accessToken = response.access_token;
+                accessTokenExpiresAt = Date.now() + Math.max(60, Number(response.expires_in || 3600) - 60) * 1000;
+                const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: 'Bearer ' + accessToken },
+                  cache: 'no-store'
+                });
+                if (!profileResponse.ok) throw new Error('Googleアカウント情報を取得できませんでした（HTTP ' + profileResponse.status + '）。');
+                const profile = await profileResponse.json();
+                if (!profile || !profile.sub) throw new Error('Googleアカウント情報が不完全です。');
+                publishState({
+                  sub: String(profile.sub),
+                  name: String(profile.name || ''),
+                  email: String(profile.email || ''),
+                  picture: String(profile.picture || ''),
+                  emailVerified: profile.email_verified === true,
+                  expiresAt: Math.floor(accessTokenExpiresAt / 1000),
+                  verifiedByServer: false
+                });
+                setError('');
+                setStatus('ログイン済み。スプレッドシートへのアクセスも許可されました。');
+              } catch (error) {
+                accessToken = '';
+                accessTokenExpiresAt = 0;
+                setError(error.message || 'Googleログインに失敗しました。');
+                setStatus('ログインに失敗しました', true);
+              } finally {
+                button.disabled = false;
+                button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+              }
+            },
+            error_callback: (error) => {
+              button.disabled = false;
+              button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+              setError(error && error.message || 'Googleの認証画面を開けませんでした。');
+            }
+          });
+          tokenClient.requestAccessToken({ prompt: 'consent' });
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+          setError(error.message || 'Google認証を開始できませんでした。');
+        }
       });
-      window.google.accounts.id.renderButton(container, {
-        type: 'standard',
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        shape: 'rectangular',
-        logo_alignment: 'left',
-        width: 260,
-        locale: 'ja'
-      });
-      setStatus('Googleのログインボタンからアカウントを選択してください');
+      container.replaceChildren(button);
+      setStatus('ログインすると、アカウント情報とスプレッドシートへのアクセス許可をまとめて求めます。');
     } catch (error) {
       setError(error.message || 'Googleログインを初期化できませんでした。');
       setStatus('Googleログインを利用できません', true);
@@ -200,7 +251,7 @@
     title.textContent = 'Googleアカウント';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Google Identity Services（OpenID Connect）のログインボタンを使います。スプレッドシートへのアクセス許可は別のボタンから行います。';
+    note.textContent = 'Googleログイン時に、アカウント情報とスプレッドシートへのアクセス権限をまとめてGoogle公式画面で確認・許可します。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:8px 0;font-size:12.5px;line-height:1.5';
     profileNode = document.createElement('div');
@@ -220,7 +271,7 @@
     const note2 = document.createElement('p');
     note2.className = 'clk-group__hint';
     note2.style.marginTop = '9px';
-    note2.textContent = 'このGitHub Pages版はログイン表示のみです。保護されたデータへの認可に使うには、バックエンドでIDトークンの署名・発行元・対象クライアントID・有効期限を検証する必要があります。';
+    note2.textContent = '許可するのは、このアプリからGoogleスプレッドシートAPIを利用する権限です。ドライブ内の全ファイルを自由に操作する権限ではありません。このGitHub Pages版のログイン状態はブラウザー内のみで、サーバーによる本人確認は行いません。';
     const guideRow = document.createElement('div');
     guideRow.style.cssText = 'margin-top:8px';
     guideRow.appendChild(guideLink());
@@ -241,8 +292,12 @@
     get currentUser() { return currentUser; },
     get signedIn() { return Boolean(currentUser); },
     frontendOnly: true,
+    getAccessToken: () => accessToken && Date.now() < accessTokenExpiresAt ? accessToken : '',
+    getAccessTokenExpiresAt: () => accessTokenExpiresAt,
     signOut: () => {
       currentUser = null;
+      accessToken = '';
+      accessTokenExpiresAt = 0;
       try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
       publishState(null);
     }
