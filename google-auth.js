@@ -1,38 +1,24 @@
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-  signOut
-} from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-
 (() => {
   'use strict';
 
   const GUIDE_URL = 'https://github.com/harunobushishido-boop/stopwatch/blob/main/GOOGLE_LOGIN_SETUP.md';
-  const config = window.PC_FIREBASE_CONFIG || {};
-  const root = document.documentElement;
+  const config = window.PC_GOOGLE_LOGIN_CONFIG || {};
+  const clientId = String(config.clientId || '').trim();
+  const configured = clientId.endsWith('.apps.googleusercontent.com') &&
+    !/PASTE_|YOUR_PROJECT|YOUR_CLIENT/i.test(clientId);
 
-  const isPlaceholder = (value) => !value || /PASTE_|YOUR_PROJECT_ID|YOUR_APP_ID|your-project/i.test(String(value));
-  const configured = ['apiKey', 'authDomain', 'projectId', 'appId'].every((key) => !isPlaceholder(config[key]));
-
-  let auth = null;
-  let loginButton = null;
-  let logoutButton = null;
+  let currentUser = null;
+  let googleIdTokenSeen = false;
+  let container = null;
   let statusNode = null;
   let profileNode = null;
   let errorNode = null;
-  let currentUser = null;
+  let signOutButton = null;
 
-  const setStatus = (message, isError = false) => {
+  const setStatus = (message, error = false) => {
     if (!statusNode) return;
     statusNode.textContent = message;
-    statusNode.style.color = isError ? '#b91c1c' : '';
+    statusNode.style.color = error ? '#b91c1c' : '';
     statusNode.setAttribute('aria-live', 'polite');
   };
 
@@ -42,64 +28,162 @@ import {
     errorNode.hidden = !message;
   };
 
-  const messageForError = (error) => {
-    const code = String(error && error.code || '');
-    if (code.includes('unauthorized-domain')) return 'Firebase Authenticationの承認済みドメインに harunobushishido-boop.github.io を追加してください。';
-    if (code.includes('operation-not-allowed')) return 'Firebase ConsoleでGoogleログインを有効にしてください。';
-    if (code.includes('popup-blocked')) return 'ポップアップがブロックされました。ブラウザーで許可して再試行してください。';
-    if (code.includes('popup-closed-by-user')) return 'ログイン画面が閉じられました。必要ならもう一度お試しください。';
-    if (code.includes('network-request-failed')) return 'ネットワークに接続できません。通信状態を確認してください。';
-    return 'ログインできませんでした。Firebaseの設定と承認済みドメインを確認してください。';
+  const guideLink = () => {
+    const a = document.createElement('a');
+    a.href = GUIDE_URL;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = '初期設定ガイド';
+    a.style.cssText = 'font-size:12px;color:inherit;text-decoration:underline;text-underline-offset:3px';
+    return a;
   };
 
-  function renderUser(user) {
+  function decodePayload(idToken) {
+    const pieces = String(idToken || '').split('.');
+    if (pieces.length !== 3) throw new Error('GoogleのIDトークン形式が不正です。');
+    const base64 = pieces[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+    const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  function publishState(user) {
     currentUser = user || null;
-    if (window.PC_AUTH && Object.prototype.hasOwnProperty.call(window.PC_AUTH, 'currentUser')) {
-      const descriptor = Object.getOwnPropertyDescriptor(window.PC_AUTH, 'currentUser');
-      if (descriptor && descriptor.writable) window.PC_AUTH.currentUser = currentUser;
-      if (descriptor && descriptor.get && !auth) window.PC_AUTH.enabled = false;
-    }
     if (profileNode) {
       profileNode.replaceChildren();
-      if (user) {
-        if (user.photoURL) {
+      if (currentUser) {
+        if (currentUser.picture) {
           const avatar = document.createElement('img');
-          avatar.src = user.photoURL;
+          avatar.src = currentUser.picture;
           avatar.alt = '';
           avatar.referrerPolicy = 'no-referrer';
           avatar.style.cssText = 'width:38px;height:38px;border-radius:50%;object-fit:cover;flex:0 0 auto';
           profileNode.appendChild(avatar);
         }
-        const textWrap = document.createElement('div');
-        textWrap.style.cssText = 'min-width:0;display:flex;flex-direction:column;gap:3px';
+        const details = document.createElement('div');
+        details.style.cssText = 'min-width:0;display:flex;flex-direction:column;gap:3px';
         const name = document.createElement('strong');
-        name.textContent = user.displayName || 'Googleユーザー';
+        name.textContent = currentUser.name || 'Googleユーザー';
         name.style.cssText = 'font-size:13px;overflow-wrap:anywhere';
         const email = document.createElement('span');
-        email.textContent = user.email || '';
+        email.textContent = currentUser.email || '';
         email.style.cssText = 'font-size:12px;opacity:.75;overflow-wrap:anywhere';
-        textWrap.append(name, email);
-        profileNode.appendChild(textWrap);
-        setStatus('Googleアカウントでログイン中');
-      } else if (configured) {
-        setStatus('ログインしていません');
+        details.append(name, email);
+        profileNode.appendChild(details);
+        setStatus('Googleアカウントでログイン中（このページ内）');
+        if (signOutButton) signOutButton.hidden = false;
       } else {
-        setStatus('ログインの初期設定が必要です');
+        setStatus(configured ? 'Googleアカウントにログインしていません' : '初期設定が必要です');
+        if (signOutButton) signOutButton.hidden = true;
       }
     }
-    if (loginButton) loginButton.hidden = Boolean(user);
-    if (logoutButton) logoutButton.hidden = !user;
+
+    window.PC_AUTH = {
+      configured,
+      get currentUser() { return currentUser; },
+      get signedIn() { return Boolean(currentUser); },
+      // GIS sends an ID token directly to this page. A server must verify its signature
+      // before using it for protected resources or permissions.
+      frontendOnly: true,
+      signOut: () => {
+        currentUser = null;
+        googleIdTokenSeen = false;
+        try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
+        try { window.google?.accounts?.id?.cancel(); } catch (error) {}
+        publishState(null);
+      }
+    };
+
     window.dispatchEvent(new CustomEvent('pc-auth-changed', {
-      detail: { signedIn: Boolean(user), user: user ? { uid: user.uid, displayName: user.displayName || '', email: user.email || '', photoURL: user.photoURL || '' } : null }
+      detail: {
+        signedIn: Boolean(currentUser),
+        frontendOnly: true,
+        user: currentUser ? {
+          sub: currentUser.sub,
+          name: currentUser.name || '',
+          email: currentUser.email || '',
+          picture: currentUser.picture || ''
+        } : null
+      }
     }));
   }
 
-  function createButton(label, primary = false) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = label;
-    button.style.cssText = 'padding:9px 13px;border:1px solid ' + (primary ? '#2563eb' : 'currentColor') + ';border-radius:10px;background:' + (primary ? '#2563eb' : 'transparent') + ';color:' + (primary ? '#fff' : 'inherit') + ';font:inherit;font-size:13px;font-weight:600;cursor:pointer';
-    return button;
+  function handleCredentialResponse(response) {
+    setError('');
+    try {
+      if (!response || !response.credential) throw new Error('GoogleからIDトークンが返されませんでした。');
+      const claims = decodePayload(response.credential);
+      const now = Math.floor(Date.now() / 1000);
+      if (!['https://accounts.google.com', 'accounts.google.com'].includes(claims.iss)) {
+        throw new Error('Google IDトークンの発行元が一致しません。');
+      }
+      if (claims.aud !== clientId) throw new Error('Google OAuthクライアントIDが一致しません。');
+      if (!claims.sub || !claims.exp || Number(claims.exp) <= now) throw new Error('Google IDトークンが期限切れ、または不完全です。');
+
+      // Display-only client state: do not persist or transmit the ID token.
+      googleIdTokenSeen = true;
+      publishState({
+        sub: String(claims.sub),
+        name: String(claims.name || ''),
+        email: String(claims.email || ''),
+        picture: String(claims.picture || ''),
+        emailVerified: claims.email_verified === true,
+        expiresAt: Number(claims.exp),
+        verifiedByServer: false
+      });
+      setError('');
+    } catch (error) {
+      setError(error.message || 'Googleでログインできませんでした。');
+      setStatus('ログインに失敗しました', true);
+      console.error('GIS credential handling failed', error);
+    }
+  }
+
+  function loadGIS() {
+    if (window.google?.accounts?.id) return Promise.resolve();
+    if (window.__pcGoogleGISPromise) return window.__pcGoogleGISPromise;
+    window.__pcGoogleGISPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => window.google?.accounts?.id
+        ? resolve()
+        : reject(new Error('Google Identity Servicesを初期化できませんでした。'));
+      script.onerror = () => reject(new Error('Google Identity Servicesを読み込めませんでした。ネットワークを確認してください。'));
+      document.head.appendChild(script);
+    });
+    return window.__pcGoogleGISPromise;
+  }
+
+  async function initializeGoogleSignIn() {
+    if (!configured || !container) return;
+    try {
+      await loadGIS();
+      if (!container.isConnected) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+        context: 'signin',
+        itp_support: true
+      });
+      window.google.accounts.id.renderButton(container, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'rectangular',
+        logo_alignment: 'left',
+        width: 260,
+        locale: 'ja'
+      });
+      setStatus('Googleのログインボタンからアカウントを選択してください');
+    } catch (error) {
+      setError(error.message || 'Googleログインを初期化できませんでした。');
+      setStatus('Googleログインを利用できません', true);
+    }
   }
 
   function installUI() {
@@ -116,7 +200,7 @@ import {
     title.textContent = 'Googleアカウント';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Googleアカウントでログインします。スプレッドシートへのアクセスは別途、連携ボタンから許可します。';
+    note.textContent = 'Google Identity Services（OpenID Connect）のログインボタンを使います。スプレッドシートへのアクセス許可は別のボタンから行います。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:8px 0;font-size:12.5px;line-height:1.5';
     profileNode = document.createElement('div');
@@ -124,90 +208,45 @@ import {
     errorNode = document.createElement('p');
     errorNode.style.cssText = 'color:#b91c1c;margin:6px 0;font-size:12px;line-height:1.5';
     errorNode.hidden = true;
-    const actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
-    loginButton = createButton('Googleでログイン', true);
-    logoutButton = createButton('ログアウト');
-    logoutButton.hidden = true;
-    const guide = document.createElement('a');
-    guide.href = GUIDE_URL;
-    guide.target = '_blank';
-    guide.rel = 'noopener noreferrer';
-    guide.textContent = '初期設定ガイド';
-    guide.style.cssText = 'font-size:12px;color:inherit;text-decoration:underline;text-underline-offset:3px';
-    actions.append(loginButton, logoutButton, guide);
-    const small = document.createElement('p');
-    small.className = 'clk-group__hint';
-    small.style.marginTop = '10px';
-    small.textContent = 'この機能を有効にするには、Firebaseプロジェクトを作成し、firebase-config.jsにWebアプリ設定を記入する必要があります。';
-    group.append(title, note, statusNode, profileNode, errorNode, actions, small);
+    container = document.createElement('div');
+    container.id = 'pcGoogleSignInButton';
+    container.style.cssText = 'min-height:44px;display:flex;align-items:center;flex-wrap:wrap;margin-top:8px';
+    signOutButton = document.createElement('button');
+    signOutButton.type = 'button';
+    signOutButton.textContent = 'ログアウト';
+    signOutButton.hidden = true;
+    signOutButton.style.cssText = 'padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;margin-top:8px';
+    signOutButton.addEventListener('click', () => window.PC_AUTH?.signOut?.());
+    const note2 = document.createElement('p');
+    note2.className = 'clk-group__hint';
+    note2.style.marginTop = '9px';
+    note2.textContent = 'このGitHub Pages版はログイン表示のみです。保護されたデータへの認可に使うには、バックエンドでIDトークンの署名・発行元・対象クライアントID・有効期限を検証する必要があります。';
+    const guideRow = document.createElement('div');
+    guideRow.style.cssText = 'margin-top:8px';
+    guideRow.appendChild(guideLink());
+    group.append(title, note, statusNode, profileNode, errorNode, container, signOutButton, guideRow, note2);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
+    publishState(null);
 
-    loginButton.addEventListener('click', async () => {
-      setError('');
-      if (!configured || !auth) {
-        setError('まだFirebase設定が入っていません。初期設定ガイドに沿ってfirebase-config.jsを設定してください。');
-        return;
-      }
-      loginButton.disabled = true;
-      loginButton.textContent = 'ログイン中…';
-      try {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        if (window.matchMedia('(max-width: 720px)').matches) {
-          await signInWithRedirect(auth, provider);
-        } else {
-          await signInWithPopup(auth, provider);
-        }
-      } catch (error) {
-        setError(messageForError(error));
-        console.error('Google sign-in failed', error);
-      } finally {
-        loginButton.disabled = false;
-        loginButton.textContent = 'Googleでログイン';
-      }
-    });
-
-    logoutButton.addEventListener('click', async () => {
-      setError('');
-      if (!auth) return;
-      try {
-        await signOut(auth);
-      } catch (error) {
-        setError('ログアウトできませんでした。通信状態を確認してください。');
-        console.error('Google sign-out failed', error);
-      }
-    });
-
-    renderUser(null);
     if (!configured) {
-      loginButton.disabled = false;
+      setError('Google CloudでOAuth 2.0のウェブアプリ クライアントIDを作成し、google-login-config.jsに設定してください。');
       return;
     }
-    try {
-      auth = getApps().length ? getAuth(getApp()) : getAuth(initializeApp(config));
-      window.PC_AUTH = {
-        auth,
-        get currentUser() { return auth.currentUser; },
-        getIdToken: async () => auth.currentUser ? auth.currentUser.getIdToken() : null,
-        signOut: () => signOut(auth),
-        get enabled() { return Boolean(auth); }
-      };
-      setPersistence(auth, browserLocalPersistence).catch((error) => console.warn('Auth persistence setup failed', error));
-      onAuthStateChanged(auth, renderUser, (error) => {
-        setError(messageForError(error));
-        setStatus('認証状態を確認できません', true);
-      });
-      getRedirectResult(auth).catch((error) => {
-        if (error) setError(messageForError(error));
-      });
-    } catch (error) {
-      setError('Firebaseを初期化できませんでした。firebase-config.jsの設定内容を確認してください。');
-      setStatus('Firebase初期化エラー', true);
-      console.error('Firebase init failed', error);
-    }
+    initializeGoogleSignIn();
   }
+
+  window.PC_AUTH = {
+    configured,
+    get currentUser() { return currentUser; },
+    get signedIn() { return Boolean(currentUser); },
+    frontendOnly: true,
+    signOut: () => {
+      currentUser = null;
+      try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
+      publishState(null);
+    }
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', installUI, { once: true });
