@@ -402,7 +402,7 @@
       }
 
       renderScheduleSheetNotice(null, 'Googleログインを確認しました。予定表スプレッドシートを自動作成しています…');
-      const response = await fetch(SHEETS_API, {
+      const response = await fetch(SHEETS_API.replace(/\\/$/, ''), {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -426,14 +426,13 @@
       saveScheduleSheetRecord(email, record);
 
       const headerUrl = SHEETS_API + encodeURIComponent(record.spreadsheetId) +
-        '/values/' + encodeURIComponent("'予定'!A1:F2") + '?valueInputOption=USER_ENTERED';
+        '/values/' + encodeURIComponent("'予定'!A1:F1") + '?valueInputOption=USER_ENTERED';
       const headerResponse = await fetch(headerUrl, {
         method: 'PUT',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           values: [
-            ['日付', '開始時刻', '終了時刻', '予定', '発表文', '有効'],
-            ['', '', '', '', '', 'TRUE']
+            ['日付', '開始時刻', '終了時刻', '予定', '発表文', '有効']
           ]
         }),
         cache: 'no-store'
