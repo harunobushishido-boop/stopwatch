@@ -9,14 +9,14 @@
   let tokenClient = null;
   let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton, testButton, testOutput;
 
-  const loadConfig = () => {
+  const loadConfig = () => ({ clientId: configuredClientId(), spreadsheetUrl: '', sheetName: '記録' });
+  function activeScheduleRecord() {
     try {
-      const value = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-      return { clientId: configuredClientId(), spreadsheetUrl: String(value.spreadsheetUrl || ''), sheetName: String(value.sheetName || '記録') };
-    } catch (error) {
-      return { clientId: configuredClientId(), spreadsheetUrl: '', sheetName: '記録' };
-    }
-  };
+      const email = String(window.PC_AUTH && window.PC_AUTH.currentUser && window.PC_AUTH.currentUser.email || '').trim().toLowerCase();
+      if (!email) return null;
+      return JSON.parse(localStorage.getItem('pc-schedule-sheet-v1') || '{}')[email] || null;
+    } catch (error) { return null; }
+  }
 
   function configuredClientId() {
     return String(window.PC_GOOGLE_LOGIN_CONFIG && window.PC_GOOGLE_LOGIN_CONFIG.clientId || '').trim();
@@ -144,39 +144,24 @@
 
   async function connect() {
     setError('');
-    const config = readFormConfig();
-    if (!config.clientId.endsWith('.apps.googleusercontent.com') || !spreadsheetId(config.spreadsheetUrl)) {
-      setError('Googleログイン用クライアントIDの設定とスプレッドシートURLを確認し、「設定を保存」を押してください。');
-      return;
-    }
-    if (JSON.stringify(config) !== JSON.stringify(loadConfig())) {
-      setError('入力内容が保存前です。「設定を保存」を押してから接続してください。');
-      return;
-    }
     connectButton.disabled = true;
-    connectButton.textContent = 'Googleに接続中…';
+    connectButton.textContent = '接続を確認中…';
     try {
-      await loadGoogleIdentity();
-      const sharedToken = window.PC_AUTH && window.PC_AUTH.getAccessToken
-        ? window.PC_AUTH.getAccessToken()
-        : '';
-      const sharedExpiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt
-        ? Number(window.PC_AUTH.getAccessTokenExpiresAt())
-        : 0;
-      if (!sharedToken || !sharedExpiry || Date.now() >= sharedExpiry) {
-        throw new Error('先に「Googleアカウントでログインしてアクセスを許可」を押してください。ログイン時にスプレッドシートの権限もまとめて許可できます。');
-      }
-      accessToken = sharedToken;
-      tokenExpiresAt = sharedExpiry;
-      setStatus('Googleログイン時に許可されたアクセス権を利用できます。「ストップウォッチ履歴を同期」を押してください。');
+      const auth = window.PC_AUTH;
+      const token = auth && auth.getAccessToken && auth.getAccessToken();
+      const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+      const record = activeScheduleRecord();
+      if (!token || !expiry || Date.now() >= expiry) throw new Error('先にGoogleアカウントでログインしてアクセスを許可してください。');
+      if (!record || !record.spreadsheetId) throw new Error('予定表スプレッドシートがまだありません。Googleログイン後、作成が終わるまでお待ちください。');
+      accessToken = token; tokenExpiresAt = expiry;
+      setStatus('自動作成した予定表スプレッドシートに接続しました。');
       syncButton.disabled = false;
     } catch (error) {
-      setError(error.message || 'Googleに接続できませんでした。OAuthクライアントIDと承認済みドメインを確認してください。');
+      setError(error.message || 'Googleスプレッドシートに接続できませんでした。');
       setStatus('未接続');
-      console.error('Google Sheets authorization failed', error);
     } finally {
       connectButton.disabled = false;
-      connectButton.textContent = 'Googleスプレッドシートに接続';
+      connectButton.textContent = '予定表スプレッドシートに接続';
     }
   }
 
@@ -188,9 +173,10 @@
       setError('先に「Googleスプレッドシートに接続」を押してアクセスを許可してください。');
       return;
     }
-    const config = loadConfig();
-    const id = spreadsheetId(config.spreadsheetUrl);
-    if (!id) { setError('スプレッドシートURLが保存されていません。'); return; }
+    const record = activeScheduleRecord();
+    const id = record && record.spreadsheetId;
+    const sheetName = '記録';
+    if (!id) { setError('自動作成された予定表スプレッドシートがありません。Googleログインを確認してください。'); return; }
     const history = window.PC_STOPWATCH_HISTORY && window.PC_STOPWATCH_HISTORY.getAll
       ? await window.PC_STOPWATCH_HISTORY.getAll()
       : [];
@@ -199,7 +185,7 @@
     syncButton.disabled = true;
     syncButton.textContent = '履歴を同期中…';
     try {
-      const tabRange = "'" + config.sheetName.replace(/'/g, "''") + "'";
+      const tabRange = "'" + sheetName.replace(/'/g, "''") + "'";
       const first = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(tabRange + '!A1:F1'));
       if (!Array.isArray(first.values) || !first.values.length || !first.values[0].some((cell) => String(cell || '').trim())) {
         await appendValues(id, tabRange + '!A:F', [[
@@ -226,7 +212,7 @@
       await appendValues(id, tabRange + '!A:F', rows);
       setStatus(uniqueHistory.length + '件のストップウォッチ履歴をスプレッドシートに追加しました。');
     } catch (error) {
-      setError('同期できませんでした。シート名が「' + config.sheetName + '」か、編集権限とGoogle Sheets APIの設定を確認してください。詳細：' + (error.message || '不明なエラー'));
+      setError('同期できませんでした。自動作成されたスプレッドシートの編集権限とGoogle Sheets APIの設定を確認してください。詳細：' + (error.message || '不明なエラー'));
       console.error('Google Sheets history sync failed', error);
     } finally {
       syncButton.disabled = !accessToken;
@@ -329,12 +315,12 @@
 
   async function runPackingTest() {
     setError('');
-    const config = loadConfig();
-    const id = spreadsheetId(config.spreadsheetUrl);
+    const record = activeScheduleRecord();
+    const id = record && record.spreadsheetId;
     const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
     const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
     if (!id) {
-      setError('先にスプレッドシートURLを保存してください。');
+      setError('自動作成された予定表スプレッドシートがありません。Googleログインを確認してください。');
       return;
     }
     if (!token || !expiry || Date.now() >= expiry) {
@@ -407,7 +393,7 @@
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           properties: { title: '6年4組便利タイマー 今日の予定表', locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
-          sheets: [{ properties: { title: '予定' } }]
+          sheets: [{ properties: { title: '予定' } }, { properties: { title: '記録' } }]
         }),
         cache: 'no-store'
       });
@@ -432,7 +418,7 @@
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           values: [
-            ['日付', '開始時刻', '終了時刻', '予定', '発表文', '有効']
+            ['日付', '授業時間数', '開始時刻', '終了時刻', '予定', '発表文', '有効']
           ]
         }),
         cache: 'no-store'
@@ -444,7 +430,17 @@
         throw new Error(headerData && headerData.error && headerData.error.message || '予定表の列見出しを書き込めませんでした。');
       }
 
-      renderScheduleSheetNotice(record, '予定表スプレッドシートを自動作成しました。');
+      const historyHeaderUrl = SHEETS_API + encodeURIComponent(record.spreadsheetId) +
+        '/values/' + encodeURIComponent("'記録'!A1:F1") + '?valueInputOption=USER_ENTERED';
+      const historyHeaderResponse = await fetch(historyHeaderUrl, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）']] }),
+        cache: 'no-store'
+      });
+      renderScheduleSheetNotice(record, historyHeaderResponse.ok
+        ? '予定表とストップウォッチ記録のシートを自動作成しました。'
+        : '予定表は作成されましたが、記録シートの見出し設定に失敗しました。');
       return record;
     })().catch(error => {
       renderScheduleSheetNotice(null, '予定表の自動作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
@@ -478,16 +474,10 @@
       link.textContent = '予定表スプレッドシートを開く';
       link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
       node.appendChild(link);
-      const useButton = makeButton('この予定表を連携先に設定', true);
-      useButton.style.marginTop = '8px';
-      useButton.addEventListener('click', () => {
-        if (urlInput) urlInput.value = record.url;
-        if (tabInput) tabInput.value = '予定';
-        if (typeof storeConfig === 'function' && storeConfig()) {
-          setStatus('自動作成した予定表を連携先に設定しました。');
-        }
-      });
-      node.appendChild(useButton);
+      const detail = document.createElement('p');
+      detail.textContent = 'このスプレッドシートを予定表とストップウォッチ記録の保存先として自動使用します。URL入力は不要です。';
+      detail.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
+      node.appendChild(detail);
     }
   }
 
@@ -504,7 +494,6 @@
     const pane = panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
     if (!pane || document.getElementById('pcGoogleSheetsGroup')) return;
 
-    const config = loadConfig();
     const group = document.createElement('section');
     group.id = 'pcGoogleSheetsGroup';
     group.className = 'clk-group';
@@ -514,14 +503,8 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'スプレッドシートのURLを保存後、Googleアカウント欄からログインしてください。ログイン時に許可したアクセス権をこの連携で利用します。';
+    note.textContent = 'Googleログイン後に自動作成する同じスプレッドシートを、予定表とストップウォッチ記録で共用します。URL入力は不要です.';
     const fields = document.createElement('div');
-    fields.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;margin-top:10px';
-    const sheet = makeInput('スプレッドシートURLまたはID', 'https://docs.google.com/spreadsheets/d/...', config.spreadsheetUrl);
-    const tab = makeInput('シート名', '記録', config.sheetName);
-    urlInput = sheet.input;
-    tabInput = tab.input;
-    fields.append(sheet.wrap, tab.wrap);
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
@@ -530,12 +513,11 @@
     errorNode.hidden = true;
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px';
-    const saveButton = makeButton('設定を保存');
-    connectButton = makeButton('Googleスプレッドシートに接続', true);
+    connectButton = makeButton('予定表スプレッドシートに接続', true);
     syncButton = makeButton('ストップウォッチ履歴を同期');
     syncButton.disabled = true;
     testButton = makeButton('忘れ物防止テスト', true);
-    actions.append(saveButton, connectButton, syncButton, testButton);
+    actions.append(connectButton, syncButton, testButton);
     testOutput = document.createElement('div');
     testOutput.id = 'pcPackingTestOutput';
     testOutput.style.cssText = 'margin-top:12px;min-width:0';
@@ -553,11 +535,10 @@
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
-    saveButton.addEventListener('click', storeConfig);
     connectButton.addEventListener('click', connect);
     syncButton.addEventListener('click', syncHistory);
     testButton.addEventListener('click', runPackingTest);
-    if (config.clientId && spreadsheetId(config.spreadsheetUrl)) setStatus('設定を読み込みました。接続してから同期してください。');
+    if (activeScheduleRecord()) setStatus('自動作成した予定表を連携先として使用します。');
     window.PC_SHEETS = {
       connect,
       syncHistory,
