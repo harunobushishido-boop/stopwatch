@@ -373,39 +373,135 @@
   }
 
   async function ensureScheduleSpreadsheetLayout(record, token) {
-    const metaResponse = await fetch(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '?fields=sheets.properties.title', {
-      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
-    });
-    const meta = await metaResponse.json().catch(() => ({}));
-    if (!metaResponse.ok) throw new Error(meta.error && meta.error.message || '既存の予定表を確認できませんでした。');
-    const titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
+    const base = SHEETS_API + encodeURIComponent(record.spreadsheetId);
+    const readMeta = async () => {
+      const response = await fetch(base + '?fields=sheets.properties(sheetId,title)', {
+        headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error && data.error.message || 'スプレッドシートのシート情報を確認できませんでした。');
+      return data;
+    };
+    let meta = await readMeta();
+    let titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
     const requests = [];
     if (!titles.has('予定')) requests.push({ addSheet: { properties: { title: '予定' } } });
     if (!titles.has('記録')) requests.push({ addSheet: { properties: { title: '記録' } } });
     if (requests.length) {
-      const response = await fetch(SHEETS_API + encodeURIComponent(record.spreadsheetId) + ':batchUpdate', {
+      const response = await fetch(base + ':batchUpdate', {
         method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests }), cache: 'no-store'
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error && data.error.message || '必要なシートを追加できませんでした。');
-      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error && data.error.message || '必要なシートを追加できませんでした。');
+      meta = await readMeta();
+      titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
     }
-    for (const [title, values] of [
-      ['予定', [['日付', '授業時間数', '開始時刻', '終了時刻', '予定', '発表文', '有効']]],
-      ['記録', [['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）']]]
-    ]) {
-      const url = SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + encodeURIComponent("'" + title + "'!A1:" + (title === '予定' ? 'G1' : 'F1')) + '?valueInputOption=USER_ENTERED';
-      const response = await fetch(url, {
+
+    const newHeader = ['日付', '授業時間数', '特別', '特別の記入', '予定', '発表文'];
+    const oldRange = encodeURIComponent("'予定'!A1:G200");
+    const oldResponse = await fetch(base + '/values/' + oldRange, {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
+    });
+    const oldData = await oldResponse.json().catch(() => ({}));
+    if (!oldResponse.ok) throw new Error(oldData.error && oldData.error.message || '予定シートの内容を読み取れませんでした。');
+    const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
+    const headers = oldValues[0] || [];
+    const oldHeaderText = headers.map(v => String(v || '').trim());
+    const needsMigration = oldHeaderText.some(v => ['開始時刻', '終了時刻', '有効'].includes(v));
+    if (needsMigration && oldValues.length) {
+      const backupTitle = '予定_旧形式バックアップ';
+      if (!titles.has(backupTitle)) {
+        const addBackup = await fetch(base + ':batchUpdate', {
+          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests: [{ addSheet: { properties: { title: backupTitle } } }] }),
+          cache: 'no-store'
+        });
+        const addData = await addBackup.json().catch(() => ({}));
+        if (!addBackup.ok) throw new Error(addData.error && addData.error.message || '旧予定表のバックアップ用シートを作成できませんでした。');
+        const backupUrl = base + '/values/' + encodeURIComponent("'" + backupTitle + "'!A1:G" + Math.max(1, oldValues.length)) + '?valueInputOption=RAW';
+        const backupResponse = await fetch(backupUrl, {
+          method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ values: oldValues }), cache: 'no-store'
+        });
+        const backupData = await backupResponse.json().catch(() => ({}));
+        if (!backupResponse.ok) throw new Error(backupData.error && backupData.error.message || '旧予定表のバックアップに失敗したため、元データを変更しませんでした。');
+        titles.add(backupTitle);
+      }
+
+      const migrated = [newHeader, ...oldValues.slice(1).map(row => [
+        String(row[0] == null ? '' : row[0]),
+        String(row[1] == null ? '' : row[1]),
+        '',
+        '',
+        String(row[4] == null ? '' : row[4]),
+        String(row[5] == null ? '' : row[5])
+      ])];
+      const writeUrl = base + '/values/' + encodeURIComponent("'予定'!A1:F" + migrated.length) + '?valueInputOption=USER_ENTERED';
+      const writeResponse = await fetch(writeUrl, {
         method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values }), cache: 'no-store'
+        body: JSON.stringify({ values: migrated }), cache: 'no-store'
       });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error && data.error.message || title + 'シートの見出しを設定できませんでした。');
+      const writeData = await writeResponse.json().catch(() => ({}));
+      if (!writeResponse.ok) throw new Error(writeData.error && writeData.error.message || '予定表の新しい列構成へ移行できませんでした。旧データはバックアップシートに残しています。');
+
+      const clearUrl = base + '/values/' + encodeURIComponent("'予定'!G:G") + ':clear';
+      const clearResponse = await fetch(clearUrl, {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: '{}', cache: 'no-store'
+      });
+      if (!clearResponse.ok) {
+        const clearData = await clearResponse.json().catch(() => ({}));
+        throw new Error(clearData.error && clearData.error.message || '旧「有効」列のクリアに失敗しました。予定表のバックアップは残っています。');
       }
+    } else if (oldHeaderText.join('|') !== newHeader.join('|')) {
+      const writeUrl = base + '/values/' + encodeURIComponent("'予定'!A1:F1") + '?valueInputOption=USER_ENTERED';
+      const writeResponse = await fetch(writeUrl, {
+        method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: [newHeader] }), cache: 'no-store'
+      });
+      const writeData = await writeResponse.json().catch(() => ({}));
+      if (!writeResponse.ok) throw new Error(writeData.error && writeData.error.message || '予定シートの見出しを設定できませんでした。');
     }
+
+    const recordHeader = ['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）'];
+    const historyUrl = base + '/values/' + encodeURIComponent("'記録'!A1:F1") + '?valueInputOption=USER_ENTERED';
+    const historyResponse = await fetch(historyUrl, {
+      method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [recordHeader] }), cache: 'no-store'
+    });
+    const historyData = await historyResponse.json().catch(() => ({}));
+    if (!historyResponse.ok) throw new Error(historyData.error && historyData.error.message || '記録シートの見出しを設定できませんでした。');
+
+    meta = await readMeta();
+    const scheduleSheet = (meta.sheets || []).find(sh => sh.properties && sh.properties.title === '予定');
+    const sheetId = scheduleSheet && scheduleSheet.properties && scheduleSheet.properties.sheetId;
+    if (!Number.isInteger(sheetId)) throw new Error('予定シートのIDを取得できませんでした。');
+    const dateOptions = [];
+    const now = new Date();
+    const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    for (let i = 0; i < 31; i++) {
+      const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + i);
+      dateOptions.push(String(d.getFullYear()).padStart(4, '0') + '/' +
+        String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'));
+    }
+    const oneOfList = values => ({
+      condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) },
+      strict: true,
+      showCustomUi: true
+    });
+    const validationRequests = [
+      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 }, rule: oneOfList(dateOptions) } },
+      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 }, rule: oneOfList(['1', '2', '3', '4', '5', '6']) } },
+      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 2, endColumnIndex: 3 }, rule: oneOfList(['通常', '特別']) } },
+      { repeatCell: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 }, cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'yyyy/mm/dd' } } }, fields: 'userEnteredFormat.numberFormat' } }
+    ];
+    const validationResponse = await fetch(base + ':batchUpdate', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requests: validationRequests }), cache: 'no-store'
+    });
+    const validationData = await validationResponse.json().catch(() => ({}));
+    if (!validationResponse.ok) throw new Error(validationData.error && validationData.error.message || '予定表のプルダウン設定に失敗しました。');
   }
 
   async function autoCreateScheduleSpreadsheet() {
@@ -455,7 +551,7 @@
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           values: [
-            ['日付', '授業時間数', '開始時刻', '終了時刻', '予定', '発表文', '有効']
+            ['日付', '授業時間数', '特別', '特別の記入', '予定', '発表文']
           ]
         }),
         cache: 'no-store'
@@ -475,9 +571,12 @@
         body: JSON.stringify({ values: [['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）']] }),
         cache: 'no-store'
       });
-      renderScheduleSheetNotice(record, historyHeaderResponse.ok
-        ? '予定表とストップウォッチ記録のシートを自動作成しました。'
-        : '予定表は作成されましたが、記録シートの見出し設定に失敗しました。');
+      if (historyHeaderResponse.ok) {
+        await ensureScheduleSpreadsheetLayout(record, token);
+        renderScheduleSheetNotice(record, '予定表に日付・授業時間数・特別欄のプルダウンを設定しました。');
+      } else {
+        renderScheduleSheetNotice(record, '予定表は作成されましたが、記録シートの見出し設定に失敗しました。');
+      }
       return record;
     })().catch(error => {
       renderScheduleSheetNotice(null, '予定表の自動作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
