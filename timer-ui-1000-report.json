@@ -11,5 +11,5 @@
   },
   "browser_errors": [],
   "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:53:12",
-  "timestamp": "2026-10-24T13:23:48.515Z"
+  "timestamp": "2026-10-24T13:26:13.911Z"
 }
