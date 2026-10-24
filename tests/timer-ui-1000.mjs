@@ -33,11 +33,11 @@ await page.route('https://www.jma.go.jp/bosai/amedas/data/map/**',route=>route.f
 let completed=0;let failure=null;
 try{
   await page.goto(ORIGIN+'/index.html?timer-test=1000',{waitUntil:'domcontentloaded'});
-  await page.evaluate(()=>document.querySelector('button.clk-controls__btn[aria-label="タイマー"]')?.click());
-  const timerMode=page.locator('.clk-mode-switch__btn').filter({hasText:'タイマー'}).first();
+  await page.locator('button.clk-controls__btn[aria-label="タイマー"]:visible').first().click({force:true});
+  const timerMode=page.locator('.clk-mode-switch__btn:visible').filter({hasText:'タイマー'}).first();
   await timerMode.waitFor({state:'attached',timeout:3000});
   await timerMode.evaluate(el=>el.click());
-  const preset=page.locator('.clk-preset-btn[aria-label="開始 1"]').first();
+  const preset=page.locator('.clk-preset-btn[aria-label="開始 1"]:visible').last();
   assert.equal(await preset.count(),1);
 
   for(let cycle=1;cycle<=200;cycle++){
