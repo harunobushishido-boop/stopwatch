@@ -3,15 +3,12 @@
   const API = 'https://sheets.googleapis.com/v4/spreadsheets/';
   const RECORD_KEY = 'pc-schedule-sheet-v1';
   const ANNOUNCED_KEY = 'pc-schedule-announced-v1';
-  const SPEAKER_CACHE_KEY = 'pc-voicevox-shikoku-metan-speaker-v1';
-  const AUDIO_CACHE_NAME = 'pc-voicevox-audio-v1';
   const VOICEVOX_LOCAL_BASE = 'http://127.0.0.1:50021';
   let lastReadAt = 0;
   let cachedRows = [];
   let readInFlight = false;
   let statusNode = null;
   let timer = null;
-  let speakerPromise = null;
 
   const todayKey = (date = new Date()) => {
     const y = date.getFullYear();
@@ -76,25 +73,6 @@
     if (custom.length) return [...new Set([...custom, ...details])].join('。');
     const intro = '今日の予定を発表します。今日は' + classes + '時間授業です。';
     return intro + (details.length ? '今日の予定は、' + details.join('。') + '。' : '');
-  }
-  function findMetanId(value, inheritedId = null) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = findMetanId(item, null);
-        if (found !== null) return found;
-      }
-      return null;
-    }
-    if (!value || typeof value !== 'object') return null;
-    const name = String(value.name || value.speaker_name || value.character_name || value.speakerName || '');
-    const ids = [value.speaker_id, value.speakerId, value.id, value.speaker, inheritedId];
-    const id = ids.find(v => v !== undefined && v !== null && /^\d+$/.test(String(v)));
-    if (/四国めたん|四国メタン|Shikoku Metan/i.test(name) && id !== undefined) return Number(id);
-    for (const [key, child] of Object.entries(value)) {
-      const found = findMetanId(child, /^\d+$/.test(key) ? key : null);
-      if (found !== null) return found;
-    }
-    return null;
   }
   const TTS_AI_BASE = 'https://api.tts.ai/v1';
   let ttsAiVoicePromise = null;
@@ -214,45 +192,6 @@
       utterance.onerror = () => reject(new Error('ブラウザー音声で読み上げできませんでした。'));
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
-    });
-  }
-  let azureSdkPromise = null;
-  function loadAzureSpeechSdk() {
-    if (window.SpeechSDK) return Promise.resolve(window.SpeechSDK);
-    if (!azureSdkPromise) {
-      azureSdkPromise = new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://aka.ms/csspeech/jsbrowserpackageraw';
-        script.async = true;
-        script.onload = () => window.SpeechSDK
-          ? resolve(window.SpeechSDK)
-          : reject(new Error('Azure Speech SDKを読み込めませんでした。'));
-        script.onerror = () => reject(new Error('Azure Speech SDKをダウンロードできませんでした。ネットワークを確認してください。'));
-        document.head.appendChild(script);
-      }).catch(error => { azureSdkPromise = null; throw error; });
-    }
-    return azureSdkPromise;
-  }
-  async function speakWithAzure(text) {
-    const cfg = window.PC_AZURE_SPEECH_CONFIG || {};
-    const key = String(cfg.key || '').trim();
-    const region = String(cfg.region || '').trim();
-    if (!key || !region || /YOUR_.*KEY|PASTE_/i.test(key)) throw new Error('Azure SpeechのAPIキーが未設定です。');
-    const sdk = await loadAzureSpeechSdk();
-    const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
-    speechConfig.speechSynthesisVoiceName = String(cfg.voice || 'ja-JP-NanamiNeural');
-    const synthesizer = new sdk.SpeechSynthesizer(speechConfig);
-    return new Promise((resolve, reject) => {
-      synthesizer.speakTextAsync(text, result => {
-        const ok = result && result.reason === sdk.ResultReason.SynthesizingAudioCompleted;
-        const detail = result && (result.errorDetails || result.reason);
-        synthesizer.close();
-        if (ok) resolve(true);
-        else reject(new Error('Azure Speechで音声を作成できませんでした：' + String(detail || '原因不明')));
-      }, error => {
-        synthesizer.close();
-        reject(new Error('Azure Speech APIに接続できませんでした：' + String(error || '原因不明')));
-      });
     });
   }
   async function speak(text) {
