@@ -369,6 +369,137 @@
     }
   }
 
+  const SCHEDULE_SHEET_STORAGE_KEY = 'pc-schedule-sheet-v1';
+  let scheduleCreationPromise = null;
+
+  function scheduleSheetRecord(email) {
+    try {
+      const all = JSON.parse(localStorage.getItem(SCHEDULE_SHEET_STORAGE_KEY) || '{}');
+      return all[email] || null;
+    } catch (error) { return null; }
+  }
+
+  function saveScheduleSheetRecord(email, record) {
+    let all = {};
+    try { all = JSON.parse(localStorage.getItem(SCHEDULE_SHEET_STORAGE_KEY) || '{}'); } catch (error) {}
+    all[email] = record;
+    localStorage.setItem(SCHEDULE_SHEET_STORAGE_KEY, JSON.stringify(all));
+  }
+
+  async function autoCreateScheduleSpreadsheet() {
+    if (scheduleCreationPromise) return scheduleCreationPromise;
+    scheduleCreationPromise = (async () => {
+      const auth = window.PC_AUTH;
+      const user = auth && auth.currentUser;
+      const token = auth && auth.getAccessToken && auth.getAccessToken();
+      const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+      if (!user || !user.email || !token || !expiry || Date.now() >= expiry) return;
+      const email = String(user.email).trim().toLowerCase();
+      const existing = scheduleSheetRecord(email);
+      if (existing && existing.spreadsheetId && existing.url) {
+        renderScheduleSheetNotice(existing, '予定表スプレッドシートは作成済みです。');
+        return existing;
+      }
+
+      renderScheduleSheetNotice(null, 'Googleログインを確認しました。予定表スプレッドシートを自動作成しています…');
+      const response = await fetch(SHEETS_API, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          properties: { title: '6年4組便利タイマー 今日の予定表', locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
+          sheets: [{ properties: { title: '予定' } }]
+        }),
+        cache: 'no-store'
+      });
+      let data = {};
+      try { data = await response.json(); } catch (error) {}
+      if (!response.ok || !data.spreadsheetId || !data.spreadsheetUrl) {
+        throw new Error(data && data.error && data.error.message || '予定表スプレッドシートを作成できませんでした。Google Sheets APIとアクセス許可を確認してください。');
+      }
+
+      const record = {
+        spreadsheetId: data.spreadsheetId,
+        url: data.spreadsheetUrl,
+        sheetName: '予定',
+        createdAt: new Date().toISOString()
+      };
+      saveScheduleSheetRecord(email, record);
+
+      const headerUrl = SHEETS_API + encodeURIComponent(record.spreadsheetId) +
+        '/values/' + encodeURIComponent("'予定'!A1:F2") + '?valueInputOption=USER_ENTERED';
+      const headerResponse = await fetch(headerUrl, {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          values: [
+            ['日付', '開始時刻', '終了時刻', '予定', '発表文', '有効'],
+            ['', '', '', '', '', 'TRUE']
+          ]
+        }),
+        cache: 'no-store'
+      });
+      let headerData = {};
+      try { headerData = await headerResponse.json(); } catch (error) {}
+      if (!headerResponse.ok) {
+        renderScheduleSheetNotice(record, '予定表は作成されましたが、見出しの設定に失敗しました。シートを開いて確認してください。');
+        throw new Error(headerData && headerData.error && headerData.error.message || '予定表の列見出しを書き込めませんでした。');
+      }
+
+      renderScheduleSheetNotice(record, '予定表スプレッドシートを自動作成しました。');
+      return record;
+    })().catch(error => {
+      renderScheduleSheetNotice(null, '予定表の自動作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
+      if (errorNode) setError(error.message || '予定表の作成に失敗しました。');
+      console.error('Automatic schedule spreadsheet creation failed', error);
+      return null;
+    }).finally(() => { scheduleCreationPromise = null; });
+    return scheduleCreationPromise;
+  }
+
+  function renderScheduleSheetNotice(record, message) {
+    let node = document.getElementById('pcScheduleSheetNotice');
+    if (!node) {
+      const host = document.getElementById('pcGoogleSheetsGroup') || document.getElementById('pcGoogleLoginGroup');
+      if (!host) return;
+      node = document.createElement('div');
+      node.id = 'pcScheduleSheetNotice';
+      node.style.cssText = 'margin-top:12px;padding:10px;border:1px solid #15803d55;border-radius:10px;font-size:12px;line-height:1.6;overflow-wrap:anywhere';
+      host.appendChild(node);
+    }
+    node.replaceChildren();
+    const text = document.createElement('p');
+    text.style.margin = '0';
+    text.textContent = message;
+    node.appendChild(text);
+    if (record && record.url) {
+      const link = document.createElement('a');
+      link.href = record.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = '予定表スプレッドシートを開く';
+      link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
+      node.appendChild(link);
+      const useButton = makeButton('この予定表を連携先に設定', true);
+      useButton.style.marginTop = '8px';
+      useButton.addEventListener('click', () => {
+        if (urlInput) urlInput.value = record.url;
+        if (tabInput) tabInput.value = '予定';
+        if (typeof storeConfig === 'function' && storeConfig()) {
+          setStatus('自動作成した予定表を連携先に設定しました。');
+        }
+      });
+      node.appendChild(useButton);
+    }
+  }
+
+  window.addEventListener('pc-auth-changed', event => {
+    if (event && event.detail && event.detail.signedIn) {
+      // Wait until the OAuth access token is available; the ID-token-only state is insufficient.
+      const auth = window.PC_AUTH;
+      if (auth && auth.getAccessToken && auth.getAccessToken()) autoCreateScheduleSpreadsheet();
+    }
+  });
+
   function installUI() {
     const panes = [...document.querySelectorAll('.clk-panel__pane')];
     const pane = panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
