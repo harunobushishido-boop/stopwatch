@@ -43,17 +43,17 @@ try{
   for(let cycle=1;cycle<=200;cycle++){
     // create
     await preset.click({force:true});completed++;
-    const circle=page.locator('.clk-timer-circle');
+    const circle=page.locator('.clk-timer-circle:visible').last();
     await circle.waitFor({state:'visible',timeout:2000});
 
     // stop
-    const stop=page.locator('.clk-timer-circle__pause');
+    const stop=circle.locator('.clk-timer-circle__pause');
     if((await stop.getAttribute('aria-label'))!=='再開')await stop.click({force:true});
     completed++;
     assert.equal((await stop.getAttribute('aria-label')),'再開',`stop/pause state failed #${cycle}`);
 
     // reset
-    const reset=page.locator('.clk-timer-circle__reset');
+    const reset=circle.locator('.clk-timer-circle__reset');
     await reset.click({force:true});completed++;
     assert.equal(await reset.getAttribute('aria-disabled'),'true',`reset state failed #${cycle}`);
 
@@ -62,7 +62,7 @@ try{
     assert.equal((await stop.getAttribute('aria-label')),'停止',`restart failed #${cycle}`);
 
     // delete from top-right x
-    const close=page.locator('.clk-timer-circle__close');
+    const close=circle.locator('.clk-timer-circle__close');
     await close.click({force:true});completed++;
     await circle.waitFor({state:'detached',timeout:2000});
   }
