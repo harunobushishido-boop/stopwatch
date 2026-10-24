@@ -13,36 +13,27 @@
     const message = document.createElement('p');
     message.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
     message.setAttribute('aria-live', 'polite');
-    button.addEventListener('click', () => {
-      if (!('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) {
-        message.textContent = 'このブラウザーは音声読み上げに対応していません。';
+    button.addEventListener('click', async () => {
+      const speak = window.PC_SCHEDULE_SPEAK;
+      if (typeof speak !== 'function') {
+        message.textContent = '音声APIの準備ができていません。ページを再読み込みして、もう一度お試しください。';
         return;
       }
-      window.speechSynthesis.cancel();
-      const voices = window.speechSynthesis.getVoices();
-      const metan = voices.find(v => /四国めたん|四国メタン|Shikoku Metan/i.test(v.name));
-      const utterance = new SpeechSynthesisUtterance(TEXT);
-      utterance.lang = 'ja-JP';
-      utterance.rate = 1;
-      if (metan) utterance.voice = metan;
       button.disabled = true;
       button.textContent = '再生中…';
-      message.textContent = metan
-        ? '四国めたんのブラウザー音声をテストしています。'
-        : '四国めたん音声が端末に見つからないため、標準の日本語音声でテストします。';
-      utterance.onend = () => {
+      message.textContent = 'VOICEVOX APIで四国めたん音声を準備しています…';
+      try {
+        await speak(TEXT);
+        const status = document.getElementById('pcScheduleAnnouncementStatus');
+        const detail = status ? status.innerText.replace(/^授業時間数に合わせた音声発表\s*/, '').trim() : '';
+        message.textContent = '音声テストが終わりました。' + (detail ? ' ' + detail : '');
+      } catch (error) {
+        message.textContent = '音声を再生できませんでした。API接続と音量を確認してください。';
+        console.error('Schedule voice test failed', error);
+      } finally {
         button.disabled = false;
         button.textContent = 'もう一度テスト';
-        message.textContent = metan
-          ? '音声テストが終わりました。'
-          : '標準音声のテストが終わりました。端末に四国めたん音声がない場合、API音声とは異なります。';
-      };
-      utterance.onerror = () => {
-        button.disabled = false;
-        button.textContent = 'もう一度テスト';
-        message.textContent = '音声を再生できませんでした。端末の音量とブラウザー設定を確認してください。';
-      };
-      window.speechSynthesis.speak(utterance);
+      }
     });
     host.append(button, message);
   }
