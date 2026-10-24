@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const BUTTON_ID = 'pcScheduleVoiceTestButton';
-  const TEXT = 'これは音声テストです。四国めたんの音声を確認しています。';
+  const TEXT = '明日の持ち物は家庭学習カードです。';
   function install() {
     const host = document.getElementById('pcScheduleAnnouncementStatus');
     if (!host || document.getElementById(BUTTON_ID)) return;
