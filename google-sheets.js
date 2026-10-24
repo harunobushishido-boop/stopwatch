@@ -541,7 +541,6 @@
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
     note.textContent = 'Googleログイン後に自動作成する同じスプレッドシートを、予定表とストップウォッチ記録で共用します。URL入力は不要です.';
-    const fields = document.createElement('div');
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
@@ -567,8 +566,8 @@
     const foot = document.createElement('p');
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
-    foot.textContent = '選択したスプレッドシートを読み、未登録の記録を末尾に追加します。既存の行は上書き・削除しません。アクセストークンはページを閉じるまでメモリ内にだけ保持します。';
-    group.append(title, note, fields, statusNode, errorNode, actions, testOutput, guide, foot);
+    foot.textContent = '自動作成した同じスプレッドシートの「記録」シートに、未登録のストップウォッチ記録を追加します。既存の行は上書き・削除しません。';
+    group.append(title, note, statusNode, errorNode, actions, testOutput, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
