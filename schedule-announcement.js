@@ -57,7 +57,7 @@
     if (!record || !record.spreadsheetId || !token) return cachedRows;
     readInFlight = true;
     try {
-      const range = encodeURIComponent("'予定'!A1:G200");
+      const range = encodeURIComponent("'予定'!A1:F200");
       const response = await fetch(API + encodeURIComponent(record.spreadsheetId) + '/values/' + range, {
         headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
       });
@@ -68,16 +68,18 @@
       return cachedRows;
     } finally { readInFlight = false; }
   }
-  function enabled(row) {
-    const v = String(row[6] == null ? '' : row[6]).trim().toLowerCase();
-    return !['false', '0', 'no', '無効', 'off'].includes(v);
-  }
   function announcementText(rows, classes) {
-    const custom = rows.map(r => String(r[5] || '').trim()).filter(Boolean);
-    if (custom.length) return [...new Set(custom)].join('。');
+    const special = rows.map(r => {
+      const kind = String(r[2] || '').trim();
+      const detail = String(r[3] || '').trim();
+      return [kind && kind !== '通常' ? kind : '', detail].filter(Boolean).join('：');
+    }).filter(Boolean);
     const plans = rows.map(r => String(r[4] || '').trim()).filter(Boolean);
+    const custom = rows.map(r => String(r[5] || '').trim()).filter(Boolean);
+    const details = [...new Set([...special, ...plans])];
+    if (custom.length) return [...new Set([...custom, ...details])].join('。');
     const intro = '今日の予定を発表します。今日は' + classes + '時間授業です。';
-    return intro + (plans.length ? '今日の予定は、' + [...new Set(plans)].join('。') + '。' : '');
+    return intro + (details.length ? '今日の予定は、' + details.join('。') + '。' : '');
   }
   function findMetanId(value, inheritedId = null) {
     if (Array.isArray(value)) {
@@ -207,29 +209,72 @@
       window.speechSynthesis.speak(utterance);
     });
   }
+  let azureSdkPromise = null;
+  function loadAzureSpeechSdk() {
+    if (window.SpeechSDK) return Promise.resolve(window.SpeechSDK);
+    if (!azureSdkPromise) {
+      azureSdkPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://aka.ms/csspeech/jsbrowserpackageraw';
+        script.async = true;
+        script.onload = () => window.SpeechSDK
+          ? resolve(window.SpeechSDK)
+          : reject(new Error('Azure Speech SDKを読み込めませんでした。'));
+        script.onerror = () => reject(new Error('Azure Speech SDKをダウンロードできませんでした。ネットワークを確認してください。'));
+        document.head.appendChild(script);
+      }).catch(error => { azureSdkPromise = null; throw error; });
+    }
+    return azureSdkPromise;
+  }
+  async function speakWithAzure(text) {
+    const cfg = window.PC_AZURE_SPEECH_CONFIG || {};
+    const key = String(cfg.key || '').trim();
+    const region = String(cfg.region || '').trim();
+    if (!key || !region || /YOUR_.*KEY|PASTE_/i.test(key)) throw new Error('Azure SpeechのAPIキーが未設定です。');
+    const sdk = await loadAzureSpeechSdk();
+    const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
+    speechConfig.speechSynthesisVoiceName = String(cfg.voice || 'ja-JP-NanamiNeural');
+    const synthesizer = new sdk.SpeechSynthesizer(speechConfig);
+    return new Promise((resolve, reject) => {
+      synthesizer.speakTextAsync(text, result => {
+        const ok = result && result.reason === sdk.ResultReason.SynthesizingAudioCompleted;
+        const detail = result && (result.errorDetails || result.reason);
+        synthesizer.close();
+        if (ok) resolve(true);
+        else reject(new Error('Azure Speechで音声を作成できませんでした：' + String(detail || '原因不明')));
+      }, error => {
+        synthesizer.close();
+        reject(new Error('Azure Speech APIに接続できませんでした：' + String(error || '原因不明')));
+      });
+    });
+  }
   async function speak(text) {
-    try {
-      const result = await speakWithSuShiki(text);
-      setStatus(result.cached
-        ? '保存済みの四国めたん音声で予定を発表しました（APIポイント消費なし）。'
-        : 'su-shiki.com のVOICEVOX API（四国めたん）で予定を発表しました。');
-      return true;
-    } catch (error) {
-      console.warn('su-shiki VOICEVOX API unavailable; trying local/browser voice', error);
+    const cfg = window.PC_AZURE_SPEECH_CONFIG || {};
+    if (String(cfg.key || '').trim() && String(cfg.region || '').trim()) {
+      try {
+        await speakWithAzure(text);
+        setStatus('Azure Speech（日本語ニューラル音声）で予定を発表しました。');
+        return true;
+      } catch (error) {
+        console.warn('Azure Speech unavailable; trying local/browser voice', error);
+        setStatus('Azure Speechで失敗したため、別の読み上げ方法を試しています。', true);
+      }
     }
     try {
       await speakWithLocalVoicevox(text);
       setStatus('このPCのVOICEVOXで予定を発表しました。');
       return true;
-    } catch (error) {}
+    } catch (error) {
+      console.warn('Local VOICEVOX unavailable; using browser speech', error);
+    }
     try {
       const metanFound = await speakWithBrowser(text);
       setStatus(metanFound
         ? '四国めたんのブラウザー音声で予定を発表しました。'
-        : '予定を読み上げました。VOICEVOX APIに接続できなかったため、ブラウザー音声を使いました。');
+        : 'ブラウザーの日本語音声で予定を発表しました。Azure Speechのキーを設定するとクラウド音声を優先します。');
       return true;
     } catch (error) {
-      setStatus('発表できませんでした。ページを開いたままにし、音声再生とAPI接続を確認してください。', true);
+      setStatus('発表できませんでした。音声APIの設定、ページの再読み込み、ブラウザーの音声を確認してください。', true);
       console.error('Schedule announcement audio failed', error);
       return false;
     }
@@ -249,7 +294,7 @@
     try {
       const rows = await readRows();
       const today = todayKey();
-      const todays = rows.filter(row => normalizeDate(row[0]) === today && enabled(row));
+      const todays = rows.filter(row => normalizeDate(row[0]) === today);
       if (!todays.length) {
         setStatus('今日の予定がありません。スプレッドシート「予定」シートのA列に今日の日付を入力してください。');
         return;
@@ -301,7 +346,7 @@
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シート：A列=日付、B列=授業時間数（5または6）、E列=予定、F列=発表文、G列=有効。5時間は14:25、6時間は15:25。ページを開いたままにしてください。同じ文章の音声は端末内に保存して再利用します。';
+    note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。5時間授業は14:25、6時間授業は15:25に発表します。日付が今日の行だけを読み込み、有効/無効の列や開始時刻の入力は使いません。ページを開いたままにしてください。';
     box.append(title, statusNode, note);
     host.appendChild(box);
   }
