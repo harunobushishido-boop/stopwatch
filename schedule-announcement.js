@@ -297,7 +297,7 @@
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。5時間授業は14:25、6時間授業は15:25に発表します。日付が今日の行だけを読み込み、有効/無効の列や開始時刻の入力は使いません。ページを開いたままにしてください。';
+    note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。日付が今日の行だけを読み込み、有効/無効や開始時刻の列は使いません。特別な予定はD列に書き込めます。ページを開いたままにしてください。';
     box.append(title, statusNode, note);
     host.appendChild(box);
   }
