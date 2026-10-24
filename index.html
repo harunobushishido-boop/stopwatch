@@ -1383,4 +1383,20 @@ if(pane&&!document.getElementById('gh1258VoiceGroup')){
 #gh1258VoiceGroup .gh-voice-test-btn{width:100%;min-height:40px;margin-top:8px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 #gh1258VoiceGroup .gh-voice-test-btn:disabled{opacity:.55;cursor:wait}
 #gh1258VoiceGroup .gh-voice-status{font-size:11px;line-height:1.6;margin:8px 0 0;overflow-wrap:anywhere}
-</style></body></html>
+</style>
+<script>
+window.PC_STOPWATCH_HISTORY = {
+  getAll: async function () {
+    try { if (typeof swHistoryReady !== 'undefined') await swHistoryReady; } catch (e) {}
+    try {
+      return (typeof swHistory !== 'undefined' && Array.isArray(swHistory))
+        ? swHistory.map(function (r) { return { id: r.id, at: r.at, elapsed: r.elapsed, laps: Array.isArray(r.laps) ? r.laps.slice() : [] }; })
+        : [];
+    } catch (e) { return []; }
+  }
+};
+</script>
+<script src="./google-login-config.js"></script>
+<script type="module" src="./google-auth.js"></script>
+<script type="module" src="./google-sheets.js"></script>
+</body></html>
