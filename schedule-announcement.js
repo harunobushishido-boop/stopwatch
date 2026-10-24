@@ -234,6 +234,7 @@
       return false;
     }
   }
+  window.PC_SCHEDULE_SPEAK = speak;
   async function checkAnnouncement() {
     const auth = window.PC_AUTH;
     if (!auth || !auth.currentUser || !tokenNow()) {
