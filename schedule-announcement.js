@@ -160,7 +160,8 @@
     }
     throw new Error('TTS.aiの音声生成に時間がかかりすぎています。');
   }
-  async function speakWithTtsAi(text) {
+  const ttsAiPreparedAudio = new Map();
+  async function createTtsAiAudio(text) {
     if (String(text || '').length > 500) throw new Error('無料の未登録利用は1回500文字までです。');
     const voice = await ttsAiVoice();
     const response = await fetch(TTS_AI_BASE + '/tts/', {
@@ -171,6 +172,20 @@
     });
     const blob = await responseAudio(response);
     if (!blob || !blob.size) throw new Error('TTS.aiから空の音声が返されました。');
+    return blob;
+  }
+  function prepareTtsAiAudio(text) {
+    if (!ttsAiPreparedAudio.has(text)) {
+      const pending = createTtsAiAudio(text).catch(error => {
+        ttsAiPreparedAudio.delete(text);
+        throw error;
+      });
+      ttsAiPreparedAudio.set(text, pending);
+    }
+    return ttsAiPreparedAudio.get(text);
+  }
+  async function speakWithTtsAi(text) {
+    const blob = await prepareTtsAiAudio(text);
     await playBlob(blob);
     return true;
   }
@@ -300,7 +315,11 @@
       const targetMinutes = hour * 60 + minute;
       const key = today + ':' + classes + ':' + target;
       if (nowMinutes < targetMinutes) {
-        setStatus(classes + '時間授業：' + target + 'に四国めたんで発表します。');
+        if (targetMinutes - nowMinutes <= 2) {
+          const announcement = announcementText(todays, classes);
+          prepareTtsAiAudio(announcement).catch(error => console.warn('TTS.ai pre-generation failed; speech will fall back at announcement time', error));
+        }
+        setStatus(classes + '時間授業：' + target + 'に音声で発表します。');
         return;
       }
       if (nowMinutes > targetMinutes + 20) {
