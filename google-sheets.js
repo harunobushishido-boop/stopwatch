@@ -402,7 +402,7 @@
       }
 
       renderScheduleSheetNotice(null, 'Googleログインを確認しました。予定表スプレッドシートを自動作成しています…');
-      const response = await fetch(SHEETS_API.replace(/\\/$/, ''), {
+      const response = await fetch(SHEETS_API.replace(/\/$/, ''), {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
