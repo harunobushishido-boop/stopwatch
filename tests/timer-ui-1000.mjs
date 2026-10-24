@@ -34,26 +34,26 @@ let completed=0;let failure=null;
 try{
   await page.goto(ORIGIN+'/index.html?timer-test=1000',{waitUntil:'domcontentloaded'});
   await page.evaluate(()=>document.querySelector('button.clk-controls__btn[aria-label="タイマー"]')?.click());
-  const timerMode=page.locator('.clk-mode-switch__btn:visible').filter({hasText:'タイマー'}).first();
+  const timerMode=page.locator('.clk-mode-switch__btn').filter({hasText:'タイマー'}).first();
   await timerMode.waitFor({state:'attached',timeout:3000});
   await timerMode.evaluate(el=>el.click());
-  const preset=page.locator('.clk-preset-btn[aria-label="開始 1"]:visible').last();
+  const preset=page.locator('.clk-preset-btn[aria-label="開始 1"]').first();
   assert.equal(await preset.count(),1);
 
   for(let cycle=1;cycle<=200;cycle++){
     // create
     await preset.click({force:true});completed++;
-    const circle=page.locator('.clk-timer-circle:visible').last();
+    const circle=page.locator('.clk-timer-circle');
     await circle.waitFor({state:'visible',timeout:2000});
 
     // stop
-    const stop=circle.locator('.clk-timer-circle__pause');
+    const stop=page.locator('.clk-timer-circle__pause');
     if((await stop.getAttribute('aria-label'))!=='再開')await stop.click({force:true});
     completed++;
     assert.equal((await stop.getAttribute('aria-label')),'再開',`stop/pause state failed #${cycle}`);
 
     // reset
-    const reset=circle.locator('.clk-timer-circle__reset');
+    const reset=page.locator('.clk-timer-circle__reset');
     await reset.click({force:true});completed++;
     assert.equal(await reset.getAttribute('aria-disabled'),'true',`reset state failed #${cycle}`);
 
@@ -62,7 +62,7 @@ try{
     assert.equal((await stop.getAttribute('aria-label')),'停止',`restart failed #${cycle}`);
 
     // delete from top-right x
-    const close=circle.locator('.clk-timer-circle__close');
+    const close=page.locator('.clk-timer-circle__close');
     await close.click({force:true});completed++;
     await circle.waitFor({state:'detached',timeout:2000});
   }
