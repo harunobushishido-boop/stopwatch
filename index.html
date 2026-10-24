@@ -1376,7 +1376,25 @@ if(pane&&!document.getElementById('gh1258VoiceGroup')){
  box.appendChild(btn);box.appendChild(statusEl);
  const videoBox=document.getElementById('ghVideoTestGroup'),foot=pane.querySelector('.clk-panel__footnote');
  if(videoBox?.parentNode)videoBox.parentNode.insertBefore(box,videoBox.nextSibling);else pane.insertBefore(box,foot||null);
- btn.addEventListener('click',async()=>{btn.disabled=true;try{await window.__gh1258VoicePlay()}finally{btn.disabled=false}});
+ let testAudio=null;
+ btn.addEventListener('click',async()=>{
+  btn.disabled=true;
+  setStatus('音声データを読み込んでいます…');
+  try{
+   if(testAudio){testAudio.pause();testAudio=null}
+   testAudio=new Audio(AUDIO_SRC);
+   testAudio.preload='auto';
+   testAudio.volume=1;
+   testAudio.addEventListener('error',()=>setStatus('音声データを読み込めませんでした（コード '+(testAudio?.error?.code||'不明')+'）。ページを再読み込みして再試行してください。'),{once:true});
+   await testAudio.play();
+   setStatus('音声を再生中です。最後まで聞こえるか確認してください。');
+   testAudio.addEventListener('ended',()=>setStatus('音声テストが完了しました。'),{once:true});
+  }catch(e){
+   const reason=e?.name==='NotAllowedError'?'ブラウザーが音声再生をブロックしました。もう一度ボタンを押してください。':e?.name==='NotSupportedError'?'この音声データ形式を再生できません。音声データの差し替えが必要です。':'再生エラー：'+(e?.name||'Error')+'。ブラウザーの音量と音声データを確認してください。';
+   setStatus(reason);
+   console.error('12:58 voice test failed',e);
+  }finally{btn.disabled=false}
+ });
 }
 })();</script><style id="gh1258VoiceStyle">
 #gh1258VoiceGroup{margin-top:14px;padding:12px;border:1px solid #00000012;border-radius:12px;background:#ffffff99}
