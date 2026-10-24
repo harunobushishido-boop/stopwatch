@@ -21,7 +21,7 @@
       }
       button.disabled = true;
       button.textContent = '再生中…';
-      message.textContent = 'VOICEVOX APIで四国めたん音声を準備しています…';
+      message.textContent = 'TTS.aiの無料日本語音声を準備しています…';
       try {
         await speak(TEXT);
         const status = document.getElementById('pcScheduleAnnouncementStatus');
