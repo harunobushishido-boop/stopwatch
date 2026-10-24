@@ -243,11 +243,15 @@
         return;
       }
       const classes = Number(String(todays.find(r => String(r[1] || '').trim())?.[1] || '').replace(/[^0-9]/g, ''));
-      if (![5, 6].includes(classes)) {
-        setStatus('今日の授業時間数をスプレッドシートのB列に「5」または「6」と入力してください。');
+      if (!Number.isInteger(classes) || classes < 1 || classes > 6) {
+        setStatus('今日の授業時間数をスプレッドシートのB列から1〜6時間で選んでください。');
         return;
       }
-      const target = classes === 6 ? '15:25' : '14:25';
+      // Existing known anchors: 5 periods end at 14:25, 6 periods at 15:25.
+      // The selected lesson count moves the announcement by one hour per period.
+      const targetMinutesFromMidnight = (14 * 60 + 25) + (classes - 5) * 60;
+      const target = String(Math.floor(targetMinutesFromMidnight / 60)).padStart(2, '0') + ':' +
+        String(targetMinutesFromMidnight % 60).padStart(2, '0');
       const [hour, minute] = target.split(':').map(Number);
       const now = new Date();
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
