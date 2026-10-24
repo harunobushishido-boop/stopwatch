@@ -372,6 +372,42 @@
     localStorage.setItem(SCHEDULE_SHEET_STORAGE_KEY, JSON.stringify(all));
   }
 
+  async function ensureScheduleSpreadsheetLayout(record, token) {
+    const metaResponse = await fetch(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '?fields=sheets.properties.title', {
+      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
+    });
+    const meta = await metaResponse.json().catch(() => ({}));
+    if (!metaResponse.ok) throw new Error(meta.error && meta.error.message || '既存の予定表を確認できませんでした。');
+    const titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
+    const requests = [];
+    if (!titles.has('予定')) requests.push({ addSheet: { properties: { title: '予定' } } });
+    if (!titles.has('記録')) requests.push({ addSheet: { properties: { title: '記録' } } });
+    if (requests.length) {
+      const response = await fetch(SHEETS_API + encodeURIComponent(record.spreadsheetId) + ':batchUpdate', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests }), cache: 'no-store'
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error && data.error.message || '必要なシートを追加できませんでした。');
+      }
+    }
+    for (const [title, values] of [
+      ['予定', [['日付', '授業時間数', '開始時刻', '終了時刻', '予定', '発表文', '有効']]],
+      ['記録', [['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）']]]
+    ]) {
+      const url = SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + encodeURIComponent("'" + title + "'!A1:" + (title === '予定' ? 'G1' : 'F1')) + '?valueInputOption=USER_ENTERED';
+      const response = await fetch(url, {
+        method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }), cache: 'no-store'
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error && data.error.message || title + 'シートの見出しを設定できませんでした。');
+      }
+    }
+  }
+
   async function autoCreateScheduleSpreadsheet() {
     if (scheduleCreationPromise) return scheduleCreationPromise;
     scheduleCreationPromise = (async () => {
@@ -383,7 +419,8 @@
       const email = String(user.email).trim().toLowerCase();
       const existing = scheduleSheetRecord(email);
       if (existing && existing.spreadsheetId && existing.url) {
-        renderScheduleSheetNotice(existing, '予定表スプレッドシートは作成済みです。');
+        await ensureScheduleSpreadsheetLayout(existing, token);
+        renderScheduleSheetNotice(existing, '予定表と記録シートを確認しました。');
         return existing;
       }
 
