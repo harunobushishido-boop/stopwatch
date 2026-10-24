@@ -3,10 +3,6 @@
   const API = 'https://sheets.googleapis.com/v4/spreadsheets/';
   const RECORD_KEY = 'pc-schedule-sheet-v1';
   const ANNOUNCED_KEY = 'pc-schedule-announced-v1';
-  // Public GitHub Pages key: intentionally client-visible per owner's request.
-  // Anyone can use these points; rotate the key if unexpected usage appears.
-  const VOICEVOX_API_KEY = 'U33-l43-947-47I';
-  const VOICEVOX_API = 'https://deprecatedapis.tts.quest/v2/voicevox/';
   const SPEAKER_CACHE_KEY = 'pc-voicevox-shikoku-metan-speaker-v1';
   const AUDIO_CACHE_NAME = 'pc-voicevox-audio-v1';
   const VOICEVOX_LOCAL_BASE = 'http://127.0.0.1:50021';
@@ -100,87 +96,83 @@
     }
     return null;
   }
-  async function getMetanSpeakerId() {
-    try {
-      const saved = Number(localStorage.getItem(SPEAKER_CACHE_KEY));
-      if (Number.isInteger(saved) && saved >= 0) return saved;
-    } catch (error) {}
-    if (!speakerPromise) {
-      speakerPromise = (async () => {
-        const response = await fetch(VOICEVOX_API + 'speakers/', { cache: 'no-store' });
-        if (!response.ok) throw new Error('話者一覧を取得できませんでした。');
+  const TTS_AI_BASE = 'https://api.tts.ai/v1';
+  let ttsAiVoicePromise = null;
+  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+  async function ttsAiVoice() {
+    if (!ttsAiVoicePromise) {
+      ttsAiVoicePromise = (async () => {
+        const response = await fetch(TTS_AI_BASE + '/voices/?model=kokoro&language=ja', { cache: 'no-store' });
+        if (!response.ok) throw new Error('TTS.aiの日本語音声一覧を取得できませんでした（HTTP ' + response.status + '）。');
         const data = await response.json();
-        const id = findMetanId(data);
-        if (!Number.isInteger(id) || id < 0) throw new Error('話者一覧から四国めたんのIDを特定できませんでした。');
-        try { localStorage.setItem(SPEAKER_CACHE_KEY, String(id)); } catch (error) {}
-        return id;
-      })().finally(() => { speakerPromise = null; });
+        const voices = Array.isArray(data.voices) ? data.voices : [];
+        const chosen = voices.find(v => /alpha/i.test(String(v.id || '') + ' ' + String(v.name || ''))) ||
+          voices.find(v => /gongitsune|ごんぎつね/i.test(String(v.id || '') + ' ' + String(v.name || ''))) ||
+          voices.find(v => String(v.language || '').toLowerCase().startsWith('ja')) || voices[0];
+        if (!chosen || !chosen.id) throw new Error('TTS.aiの日本語音声が見つかりませんでした。');
+        return String(chosen.id);
+      })().catch(error => {
+        ttsAiVoicePromise = null;
+        throw error;
+      });
     }
-    return speakerPromise;
+    return ttsAiVoicePromise;
   }
-  async function cacheKeyFor(text, speakerId) {
-    const raw = 'shikoku-metan-v1|' + speakerId + '|0|1|1|' + text;
-    if (window.crypto && crypto.subtle && window.TextEncoder) {
-      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-      return [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
+  async function responseAudio(response) {
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error('TTS.ai APIエラー（HTTP ' + response.status + '）：' + detail.slice(0, 200));
     }
-    return encodeURIComponent(raw).slice(0, 180);
-  }
-  async function getCachedAudio(key) {
-    if (!('caches' in window)) return null;
-    try {
-      const cache = await caches.open(AUDIO_CACHE_NAME);
-      const response = await cache.match(new Request(location.origin + '/__voicevox_audio_cache__/' + key));
-      return response && response.ok ? await response.blob() : null;
-    } catch (error) { return null; }
-  }
-  async function saveCachedAudio(key, blob) {
-    if (!('caches' in window)) return;
-    try {
-      const cache = await caches.open(AUDIO_CACHE_NAME);
-      await cache.put(new Request(location.origin + '/__voicevox_audio_cache__/' + key), new Response(blob, {
-        headers: { 'Content-Type': blob.type || 'audio/wav', 'Cache-Control': 'public, max-age=31536000' }
-      }));
-    } catch (error) { /* Cache storage may be disabled or full. */ }
-  }
-  async function playBlob(blob) {
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    try { await audio.play(); }
-    catch (error) { URL.revokeObjectURL(url); throw error; }
-    audio.addEventListener('ended', () => URL.revokeObjectURL(url), { once: true });
-    audio.addEventListener('error', () => URL.revokeObjectURL(url), { once: true });
-    return true;
-  }
-  async function speakWithSuShiki(text) {
-    const speakerId = await getMetanSpeakerId();
-    const cacheKey = await cacheKeyFor(text, speakerId);
-    const cached = await getCachedAudio(cacheKey);
-    if (cached) {
-      await playBlob(cached);
-      return { cached: true };
+    const type = String(response.headers.get('content-type') || '').toLowerCase();
+    if (type.startsWith('audio/')) return response.blob();
+    const raw = await response.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch (error) {
+      throw new Error('TTS.aiから音声データではない応答が返されました。');
     }
-    const form = new URLSearchParams();
-    form.set('key', VOICEVOX_API_KEY);
-    form.set('text', text);
-    form.set('speaker', String(speakerId));
-    form.set('pitch', '0');
-    form.set('intonationScale', '1');
-    form.set('speed', '1');
-    const response = await fetch(VOICEVOX_API + 'audio/', {
+    if (data.error || data.status === 'failed') {
+      throw new Error('TTS.ai音声生成失敗：' + String(data.error || data.message || '原因不明').slice(0, 180));
+    }
+    const directUrl = data.result_url || data.audio_url || data.url;
+    if (directUrl) {
+      const audioResponse = await fetch(directUrl, { cache: 'no-store' });
+      if (!audioResponse.ok) throw new Error('生成した音声をダウンロードできませんでした（HTTP ' + audioResponse.status + '）。');
+      return audioResponse.blob();
+    }
+    const jobId = data.uuid || data.job_id || data.id;
+    if (!jobId) throw new Error('TTS.aiの応答に音声URLまたは生成IDがありません。');
+    for (let attempt = 0; attempt < 45; attempt++) {
+      await sleep(1200);
+      const poll = await fetch(TTS_AI_BASE + '/speech/results/?uuid=' + encodeURIComponent(jobId), { cache: 'no-store' });
+      if (!poll.ok) {
+        const detail = await poll.text().catch(() => '');
+        throw new Error('TTS.aiの生成結果を確認できません（HTTP ' + poll.status + '）：' + detail.slice(0, 120));
+      }
+      const result = await poll.json();
+      if (result.status === 'failed') throw new Error('TTS.ai音声生成失敗：' + String(result.error || result.message || '原因不明').slice(0, 180));
+      if (result.status === 'completed') {
+        const url = result.result_url || result.audio_url || result.url;
+        if (!url) throw new Error('TTS.aiは生成完了を返しましたが、音声URLがありません。');
+        const audioResponse = await fetch(url, { cache: 'no-store' });
+        if (!audioResponse.ok) throw new Error('生成した音声を取得できません（HTTP ' + audioResponse.status + '）。');
+        return audioResponse.blob();
+      }
+    }
+    throw new Error('TTS.aiの音声生成に時間がかかりすぎています。');
+  }
+  async function speakWithTtsAi(text) {
+    if (String(text || '').length > 500) throw new Error('無料の未登録利用は1回500文字までです。');
+    const voice = await ttsAiVoice();
+    const response = await fetch(TTS_AI_BASE + '/tts/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-      body: form.toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'kokoro', language: 'ja', voice, text, format: 'mp3' }),
       cache: 'no-store'
     });
-    const blob = await response.blob();
-    if (!response.ok || !blob.size || !/^audio\//i.test(blob.type)) {
-      const detail = await blob.text().catch(() => '');
-      throw new Error('VOICEVOX API error (' + response.status + '): ' + detail.slice(0, 160));
-    }
-    await saveCachedAudio(cacheKey, blob);
+    const blob = await responseAudio(response);
+    if (!blob || !blob.size) throw new Error('TTS.aiから空の音声が返されました。');
     await playBlob(blob);
-    return { cached: false };
+    return true;
   }
   async function speakWithLocalVoicevox(text) {
     const queryUrl = VOICEVOX_LOCAL_BASE + '/audio_query?text=' + encodeURIComponent(text) + '&speaker=2';
@@ -249,16 +241,13 @@
     });
   }
   async function speak(text) {
-    const cfg = window.PC_AZURE_SPEECH_CONFIG || {};
-    if (String(cfg.key || '').trim() && String(cfg.region || '').trim()) {
-      try {
-        await speakWithAzure(text);
-        setStatus('Azure Speech（日本語ニューラル音声）で予定を発表しました。');
-        return true;
-      } catch (error) {
-        console.warn('Azure Speech unavailable; trying local/browser voice', error);
-        setStatus('Azure Speechで失敗したため、別の読み上げ方法を試しています。', true);
-      }
+    try {
+      await speakWithTtsAi(text);
+      setStatus('TTS.aiの無料日本語音声で予定を発表しました。');
+      return true;
+    } catch (error) {
+      console.warn('TTS.ai unavailable; trying local/browser voice', error);
+      setStatus('TTS.aiに接続できないため、別の読み上げ方法を試しています。', true);
     }
     try {
       await speakWithLocalVoicevox(text);
@@ -271,10 +260,10 @@
       const metanFound = await speakWithBrowser(text);
       setStatus(metanFound
         ? '四国めたんのブラウザー音声で予定を発表しました。'
-        : 'ブラウザーの日本語音声で予定を発表しました。Azure Speechのキーを設定するとクラウド音声を優先します。');
+        : 'ブラウザーの日本語音声で予定を発表しました。');
       return true;
     } catch (error) {
-      setStatus('発表できませんでした。音声APIの設定、ページの再読み込み、ブラウザーの音声を確認してください。', true);
+      setStatus('発表できませんでした。ネット接続とブラウザーの音声を確認してください。', true);
       console.error('Schedule announcement audio failed', error);
       return false;
     }
