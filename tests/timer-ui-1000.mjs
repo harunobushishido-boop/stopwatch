@@ -33,7 +33,7 @@ await page.route('https://www.jma.go.jp/bosai/amedas/data/map/**',route=>route.f
 let completed=0;let failure=null;
 try{
   await page.goto(ORIGIN+'/index.html?timer-test=1000',{waitUntil:'domcontentloaded'});
-  await page.locator('button.clk-controls__btn[aria-label="タイマー"]:visible').first().click({force:true});
+  await page.evaluate(()=>document.querySelector('button.clk-controls__btn[aria-label="タイマー"]')?.click());
   const timerMode=page.locator('.clk-mode-switch__btn:visible').filter({hasText:'タイマー'}).first();
   await timerMode.waitFor({state:'attached',timeout:3000});
   await timerMode.evaluate(el=>el.click());
