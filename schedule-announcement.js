@@ -108,7 +108,7 @@
     try {
       await speakWithVoicevox(text);
       setStatus('四国めたん（VOICEVOX）で予定を発表しました。');
-      return;
+      return true;
     } catch (error) {
       // VOICEVOX can be used when its local engine is running on this PC.
     }
@@ -117,9 +117,11 @@
       setStatus(metanFound
         ? '四国めたんのブラウザー音声で予定を発表しました。'
         : '予定を読み上げました。四国めたんの音声を使うには、このPCでVOICEVOXを起動してください。');
+      return true;
     } catch (error) {
       setStatus('発表できませんでした。音声再生を有効にして、ページを開いたままにしてください。', true);
       console.error('Schedule announcement audio failed', error);
+      return false;
     }
   }
   async function checkAnnouncement() {
@@ -166,9 +168,11 @@
         setStatus(classes + '時間授業の発表は本日分を実行済みです。');
         return;
       }
-      announced[key] = true;
-      localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
-      await speak(announcementText(todays, classes));
+      const played = await speak(announcementText(todays, classes));
+      if (played) {
+        announced[key] = true;
+        localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
+      }
     } catch (error) {
       setStatus('予定表を読み取れませんでした。Googleログインとアクセス許可を確認してください。', true);
       console.error('Schedule spreadsheet read failed', error);
