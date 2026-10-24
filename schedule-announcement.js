@@ -65,7 +65,8 @@
     const special = rows.map(r => {
       const kind = String(r[2] || '').trim();
       const detail = String(r[3] || '').trim();
-      return [kind && kind !== '通常' ? kind : '', detail].filter(Boolean).join('：');
+      if (!detail) return '';
+      return kind === '特別' ? '特別：' + detail : detail;
     }).filter(Boolean);
     const plans = rows.map(r => String(r[4] || '').trim()).filter(Boolean);
     const custom = rows.map(r => String(r[5] || '').trim()).filter(Boolean);
