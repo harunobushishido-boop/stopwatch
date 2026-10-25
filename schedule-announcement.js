@@ -9,6 +9,7 @@
   let readInFlight = false;
   let statusNode = null;
   let timer = null;
+  let announcementCheckInFlight = false;
 
   const todayKey = (date = new Date()) => {
     const y = date.getFullYear();
@@ -36,7 +37,7 @@
   };
   async function readRows(force = false) {
     if (readInFlight) return cachedRows;
-    if (!force && Date.now() - lastReadAt < 60000) return cachedRows;
+    if (!force && Date.now() - lastReadAt < 4000) return cachedRows;
     const record = recordForCurrentUser();
     const token = tokenNow();
     if (!record || !record.spreadsheetId || !token) return cachedRows;
@@ -248,19 +249,21 @@
     }
   }
   window.PC_SCHEDULE_SPEAK = speak;
-  async function checkAnnouncement() {
-    const auth = window.PC_AUTH;
-    if (!auth || !auth.currentUser || !tokenNow()) {
-      setStatus('Googleログインすると、今日の予定と授業時間数を発表します。');
-      return;
-    }
-    const record = recordForCurrentUser();
-    if (!record || !record.spreadsheetId) {
-      setStatus('今日の予定シートを準備しています…');
-      return;
-    }
+  async function checkAnnouncement(forceRefresh = false) {
+    if (announcementCheckInFlight) return;
+    announcementCheckInFlight = true;
     try {
-      const rows = await readRows();
+      const auth = window.PC_AUTH;
+      if (!auth || !auth.currentUser || !tokenNow()) {
+        setStatus('Googleログインすると、今日の予定と授業時間数を発表します。');
+        return;
+      }
+      const record = recordForCurrentUser();
+      if (!record || !record.spreadsheetId) {
+        setStatus('今日の予定シートを準備しています…');
+        return;
+      }
+      const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
         setStatus('「予定」シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付は不要です。');
@@ -308,6 +311,8 @@
     } catch (error) {
       setStatus('今日の予定を読み取れませんでした。Googleログインとアクセス許可を確認してください。', true);
       console.error('Today schedule read failed', error);
+    } finally {
+      announcementCheckInFlight = false;
     }
   }
   function installStatus() {
@@ -341,12 +346,23 @@
     installStatus();
     if (timer) clearInterval(timer);
     checkAnnouncement();
-    timer = setInterval(checkAnnouncement, 10000);
+    // Google Sheets APIはPush通知を直接送らないため、5秒ごとに最新の2行を確認する。
+    timer = setInterval(() => checkAnnouncement(true), 5000);
   }
   window.addEventListener('pc-auth-changed', () => {
     installStatus();
     lastReadAt = 0;
-    checkAnnouncement();
+    checkAnnouncement(true);
+  });
+  window.addEventListener('focus', () => {
+    lastReadAt = 0;
+    checkAnnouncement(true);
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      lastReadAt = 0;
+      checkAnnouncement(true);
+    }
   });
   const observer = new MutationObserver(() => { if (!statusNode) installStatus(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
