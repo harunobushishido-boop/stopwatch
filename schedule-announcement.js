@@ -68,7 +68,7 @@
     const intro = Number.isInteger(classes) && classes >= 1 && classes <= 6
       ? '今日の予定を発表します。今日は' + classes + '時間授業です。'
       : '今日の予定を発表します。';
-    return [intro, ...uniqueDetails].filter(Boolean).join('。');
+    return [intro, ...uniqueDetails].filter(Boolean).join('。').replace(/([。！？!?])(?:[。！？!?])+/g, '$1');
   }
   window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
   // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
