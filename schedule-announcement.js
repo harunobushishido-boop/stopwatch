@@ -75,108 +75,123 @@
     const intro = '今日の予定を発表します。今日は' + classes + '時間授業です。';
     return intro + (details.length ? '今日の予定は、' + details.join('。') + '。' : '');
   }
-  const TTS_AI_BASE = 'https://api.tts.ai/v1';
-  const TTS_AI_KEY_STORAGE = 'pc-tts-ai-api-key-v1';
-  const getTtsAiApiKey = () => {
-    try { return String(localStorage.getItem(TTS_AI_KEY_STORAGE) || '').trim(); }
-    catch (error) { return ''; }
-  };
-  const ttsAiHeaders = (json = false) => {
-    const headers = json ? { 'Content-Type': 'application/json' } : {};
-    const key = getTtsAiApiKey();
-    if (key) headers.Authorization = 'Bearer ' + key;
-    return headers;
-  };
-  let ttsAiVoicePromise = null;
+  // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
+  // speaker=2 は VOICEVOX:四国めたん（ノーマル）。
+  const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
+  const TTS_QUEST_SPEAKER = 2;
+  const voicevoxQuestPreparedAudio = new Map();
+  let voicevoxQuestNextRequestAt = 0;
+  let activeAudio = null;
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-  async function ttsAiVoice() {
-    if (!ttsAiVoicePromise) {
-      ttsAiVoicePromise = (async () => {
-        const response = await fetch(TTS_AI_BASE + '/voices/?model=kokoro&language=ja', { headers: ttsAiHeaders(), cache: 'no-store' });
-        if (!response.ok) throw new Error('TTS.aiの日本語音声一覧を取得できませんでした（HTTP ' + response.status + '）。');
-        const data = await response.json();
-        const voices = Array.isArray(data.voices) ? data.voices : [];
-        const chosen = voices.find(v => /alpha/i.test(String(v.id || '') + ' ' + String(v.name || ''))) ||
-          voices.find(v => /gongitsune|ごんぎつね/i.test(String(v.id || '') + ' ' + String(v.name || ''))) ||
-          voices.find(v => String(v.language || '').toLowerCase().startsWith('ja')) || voices[0];
-        if (!chosen || !chosen.id) throw new Error('TTS.aiの日本語音声が見つかりませんでした。');
-        return String(chosen.id);
-      })().catch(error => {
-        ttsAiVoicePromise = null;
-        throw error;
+  function playAudioUrl(url) {
+    return new Promise((resolve, reject) => {
+      if (activeAudio) {
+        try { activeAudio.pause(); activeAudio.src = ''; } catch (error) {}
+        activeAudio = null;
+      }
+      const audio = new Audio(url);
+      activeAudio = audio;
+      audio.preload = 'auto';
+      audio.volume = 1;
+      let settled = false;
+      const cleanup = () => {
+        audio.removeEventListener('ended', onEnded);
+        audio.removeEventListener('error', onError);
+        if (activeAudio === audio) activeAudio = null;
+      };
+      const onEnded = () => {
+        if (settled) return;
+        settled = true; cleanup(); resolve(true);
+      };
+      const onError = () => {
+        if (settled) return;
+        settled = true; cleanup();
+        reject(new Error('VOICEVOX音声を再生できませんでした。ネット接続とブラウザーの音量を確認してください。'));
+      };
+      audio.addEventListener('ended', onEnded, { once: true });
+      audio.addEventListener('error', onError, { once: true });
+      Promise.resolve(audio.play()).catch(error => {
+        if (settled) return;
+        settled = true; cleanup();
+        reject(new Error(error && error.name === 'NotAllowedError'
+          ? 'ブラウザーが自動再生をブロックしました。ページ上の音声テストボタンを一度押してください。'
+          : 'VOICEVOX音声の再生を開始できませんでした：' + String(error && error.message || error)));
       });
-    }
-    return ttsAiVoicePromise;
-  }
-  async function responseAudio(response) {
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw new Error('TTS.ai APIエラー（HTTP ' + response.status + '）：' + detail.slice(0, 200));
-    }
-    const type = String(response.headers.get('content-type') || '').toLowerCase();
-    if (type.startsWith('audio/')) return response.blob();
-    const raw = await response.text();
-    let data = {};
-    try { data = JSON.parse(raw); } catch (error) {
-      throw new Error('TTS.aiから音声データではない応答が返されました。');
-    }
-    if (data.error || data.status === 'failed') {
-      throw new Error('TTS.ai音声生成失敗：' + String(data.error || data.message || '原因不明').slice(0, 180));
-    }
-    const directUrl = data.result_url || data.audio_url || data.url;
-    if (directUrl) {
-      const audioResponse = await fetch(directUrl, { cache: 'no-store' });
-      if (!audioResponse.ok) throw new Error('生成した音声をダウンロードできませんでした（HTTP ' + audioResponse.status + '）。');
-      return audioResponse.blob();
-    }
-    const jobId = data.uuid || data.job_id || data.id;
-    if (!jobId) throw new Error('TTS.aiの応答に音声URLまたは生成IDがありません。');
-    for (let attempt = 0; attempt < 45; attempt++) {
-      await sleep(1200);
-      const poll = await fetch(TTS_AI_BASE + '/speech/results/?uuid=' + encodeURIComponent(jobId), { headers: ttsAiHeaders(), cache: 'no-store' });
-      if (!poll.ok) {
-        const detail = await poll.text().catch(() => '');
-        throw new Error('TTS.aiの生成結果を確認できません（HTTP ' + poll.status + '）：' + detail.slice(0, 120));
-      }
-      const result = await poll.json();
-      if (result.status === 'failed') throw new Error('TTS.ai音声生成失敗：' + String(result.error || result.message || '原因不明').slice(0, 180));
-      if (result.status === 'completed') {
-        const url = result.result_url || result.audio_url || result.url;
-        if (!url) throw new Error('TTS.aiは生成完了を返しましたが、音声URLがありません。');
-        const audioResponse = await fetch(url, { cache: 'no-store' });
-        if (!audioResponse.ok) throw new Error('生成した音声を取得できません（HTTP ' + audioResponse.status + '）。');
-        return audioResponse.blob();
-      }
-    }
-    throw new Error('TTS.aiの音声生成に時間がかかりすぎています。');
-  }
-  const ttsAiPreparedAudio = new Map();
-  async function createTtsAiAudio(text) {
-    if (String(text || '').length > 500) throw new Error('無料の未登録利用は1回500文字までです。');
-    const voice = await ttsAiVoice();
-    const response = await fetch(TTS_AI_BASE + '/tts/', {
-      method: 'POST',
-      headers: ttsAiHeaders(true),
-      body: JSON.stringify({ model: 'kokoro', language: 'ja', voice, text, format: 'mp3' }),
-      cache: 'no-store'
     });
-    const blob = await responseAudio(response);
-    if (!blob || !blob.size) throw new Error('TTS.aiから空の音声が返されました。');
-    return blob;
   }
-  function prepareTtsAiAudio(text) {
-    if (!ttsAiPreparedAudio.has(text)) {
-      const pending = createTtsAiAudio(text).catch(error => {
-        ttsAiPreparedAudio.delete(text);
+  async function playBlob(blob) {
+    const url = URL.createObjectURL(blob);
+    try { return await playAudioUrl(url); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  async function requestVoicevoxQuestAudioUrl(text) {
+    const phrase = String(text || '').trim();
+    if (!phrase) throw new Error('読み上げる文章が空です。');
+    if (phrase.length > 500) throw new Error('無料の読み上げAPIに送る文章が長すぎます。500文字以内にしてください。');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const waiting = voicevoxQuestNextRequestAt - Date.now();
+      if (waiting > 0) await sleep(waiting);
+      const url = new URL(TTS_QUEST_API);
+      url.searchParams.set('text', phrase);
+      url.searchParams.set('speaker', String(TTS_QUEST_SPEAKER));
+      let response;
+      let data;
+      try {
+        response = await fetch(url.toString(), { method: 'GET', cache: 'no-store' });
+        data = await response.json().catch(() => ({}));
+      } catch (error) {
+        throw new Error('WEB版VOICEVOX APIに接続できません。ネット接続またはAPI側の状態を確認してください。');
+      }
+      const retryAfter = Number(data && data.retryAfter || 0);
+      if (retryAfter > 0) {
+        voicevoxQuestNextRequestAt = Date.now() + retryAfter * 1000;
+        if (attempt >= 2) throw new Error('無料APIの利用間隔に達しました。約' + retryAfter + '秒後に音声テストをもう一度お試しください。');
+        setStatus('無料VOICEVOX APIの利用間隔に達したため、' + retryAfter + '秒待ってから再試行します。');
+        await sleep(Math.max(1000, retryAfter * 1000));
+        continue;
+      }
+      if (!response.ok || !data || data.success !== true) {
+        throw new Error('WEB版VOICEVOX APIが音声を受け付けませんでした（HTTP ' + response.status + '）。少し待って再試行してください。');
+      }
+      if (!data.audioStatusUrl || !data.mp3DownloadUrl) {
+        throw new Error('WEB版VOICEVOX APIから音声URLが返されませんでした。');
+      }
+      // Synthesis is asynchronous. Poll the provided status URL until audio is ready.
+      for (let poll = 0; poll < 60; poll++) {
+        await sleep(1000);
+        let statusResponse;
+        let status;
+        try {
+          statusResponse = await fetch(data.audioStatusUrl, { cache: 'no-store' });
+          status = await statusResponse.json().catch(() => ({}));
+        } catch (error) {
+          throw new Error('VOICEVOXの音声生成状況を確認できません。APIの接続設定を確認してください。');
+        }
+        if (!statusResponse.ok) throw new Error('VOICEVOXの音声生成状況を取得できませんでした（HTTP ' + statusResponse.status + '）。');
+        if (status.isAudioError) throw new Error('VOICEVOXの音声合成に失敗しました。');
+        if (status.isAudioReady) {
+          voicevoxQuestNextRequestAt = Date.now();
+          return data.mp3DownloadUrl;
+        }
+      }
+      throw new Error('VOICEVOXの音声生成が時間内に完了しませんでした。少し待って再試行してください。');
+    }
+    throw new Error('VOICEVOX APIを再試行できませんでした。');
+  }
+  function prepareVoicevoxQuestAudio(text) {
+    const phrase = String(text || '').trim();
+    if (!voicevoxQuestPreparedAudio.has(phrase)) {
+      const pending = requestVoicevoxQuestAudioUrl(phrase).catch(error => {
+        voicevoxQuestPreparedAudio.delete(phrase);
         throw error;
       });
-      ttsAiPreparedAudio.set(text, pending);
+      voicevoxQuestPreparedAudio.set(phrase, pending);
     }
-    return ttsAiPreparedAudio.get(text);
+    return voicevoxQuestPreparedAudio.get(phrase);
   }
-  async function speakWithTtsAi(text) {
-    const blob = await prepareTtsAiAudio(text);
-    await playBlob(blob);
+  async function speakWithVoicevoxQuest(text) {
+    const audioUrl = await prepareVoicevoxQuestAudio(text);
+    await playAudioUrl(audioUrl);
     return true;
   }
   async function speakWithLocalVoicevox(text) {
@@ -208,12 +223,12 @@
   }
   async function speak(text) {
     try {
-      await speakWithTtsAi(text);
-      setStatus('TTS.aiの無料日本語音声で予定を発表しました。');
+      await speakWithVoicevoxQuest(text);
+      setStatus('WEB版VOICEVOX API（四国めたん・ノーマル）で発表しました。');
       return true;
     } catch (error) {
-      console.warn('TTS.ai unavailable; trying local/browser voice', error);
-      setStatus('TTS.aiに接続できないため、別の読み上げ方法を試しています。', true);
+      console.warn('TTS Quest VOICEVOX unavailable; trying local/browser voice', error);
+      setStatus('WEB版VOICEVOX APIが使えないため、別の読み上げ方法を試しています。', true);
     }
     try {
       await speakWithLocalVoicevox(text);
@@ -272,7 +287,7 @@
       if (nowMinutes < targetMinutes) {
         if (targetMinutes - nowMinutes <= 2) {
           const announcement = announcementText(todays, classes);
-          prepareTtsAiAudio(announcement).catch(error => console.warn('TTS.ai pre-generation failed; speech will fall back at announcement time', error));
+          prepareVoicevoxQuestAudio(announcement).catch(error => console.warn('TTS.ai pre-generation failed; speech will fall back at announcement time', error));
         }
         setStatus(classes + '時間授業：' + target + 'に音声で発表します。');
         return;
@@ -310,83 +325,18 @@
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
     note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。日付が今日の行だけを読み込み、有効/無効や開始時刻の列は使いません。特別な予定はD列に書き込めます。ページを開いたままにしてください。';
-    const keyHelp = document.createElement('p');
-    keyHelp.style.cssText = 'margin:12px 0 0;font-size:12px;line-height:1.6';
-    keyHelp.append('TTS.aiの無料アカウント残高を使う場合は、');
-    const keyHelpLink = document.createElement('a');
-    keyHelpLink.href = 'https://tts.ai/account/';
-    keyHelpLink.target = '_blank';
-    keyHelpLink.rel = 'noopener noreferrer';
-    keyHelpLink.textContent = 'TTS.ai Account Settings';
-    keyHelpLink.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:3px';
-    keyHelp.append(keyHelpLink, ' でAPIキーを作成し、ここに貼り付けてください。');
-    const keyLabel = document.createElement('label');
-    keyLabel.textContent = 'TTS.ai APIキー（任意）';
-    keyLabel.style.cssText = 'display:block;margin-top:6px;font-size:12px;font-weight:700';
-    const keyRow = document.createElement('div');
-    keyRow.style.cssText = 'display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;margin-top:5px';
-    const keyInput = document.createElement('input');
-    keyInput.id = 'pcTtsAiApiKeyInput';
-    keyInput.type = 'password';
-    keyInput.autocomplete = 'off';
-    keyInput.spellcheck = false;
-    keyInput.placeholder = 'sk-tts-…';
-    keyInput.value = getTtsAiApiKey();
-    keyInput.style.cssText = 'flex:1 1 220px;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #9ca3af;border-radius:8px;background:var(--input-bg, #fff);color:var(--text-color, #111827);font:inherit;font-size:12px';
-    const revealButton = document.createElement('button');
-    revealButton.type = 'button';
-    revealButton.textContent = '表示';
-    revealButton.style.cssText = 'padding:7px 10px;border:1px solid #9ca3af;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
-    revealButton.addEventListener('click', () => {
-      const visible = keyInput.type === 'password';
-      keyInput.type = visible ? 'text' : 'password';
-      revealButton.textContent = visible ? '隠す' : '表示';
-    });
-    const saveKeyButton = document.createElement('button');
-    saveKeyButton.type = 'button';
-    saveKeyButton.textContent = 'キーを保存';
-    saveKeyButton.style.cssText = 'padding:7px 10px;border:1px solid #15803d;border-radius:8px;background:#15803d;color:white;font:inherit;font-size:12px;font-weight:700;cursor:pointer';
-    const clearKeyButton = document.createElement('button');
-    clearKeyButton.type = 'button';
-    clearKeyButton.textContent = '削除';
-    clearKeyButton.style.cssText = 'padding:7px 10px;border:1px solid #9ca3af;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
-    const keyStatus = document.createElement('p');
-    keyStatus.id = 'pcTtsAiApiKeyStatus';
-    keyStatus.style.cssText = 'margin:5px 0 0;opacity:.8;font-size:11px;line-height:1.55';
-    const refreshKeyStatus = (message = '') => {
-      const stored = Boolean(getTtsAiApiKey());
-      keyStatus.textContent = message || (stored
-        ? 'APIキーをこの端末のブラウザーに保存済み。音声APIの呼び出し時にだけTTS.aiへ送信します。'
-        : 'キー未登録の場合はTTS.aiの匿名無料枠を使用します。アカウントの無料文字数を使うには、TTS.aiのAccount SettingsでAPIキーを作成して保存してください。');
-    };
-    saveKeyButton.addEventListener('click', () => {
-      const value = keyInput.value.trim();
-      if (value && !/^sk-tts-/i.test(value)) {
-        refreshKeyStatus('APIキーの形式を確認してください。TTS.aiのAPIキーは通常 sk-tts- で始まります。');
-        return;
-      }
-      try {
-        if (value) localStorage.setItem(TTS_AI_KEY_STORAGE, value);
-        else localStorage.removeItem(TTS_AI_KEY_STORAGE);
-        ttsAiPreparedAudio.clear();
-        ttsAiVoicePromise = null;
-        refreshKeyStatus(value ? 'APIキーをこの端末に保存しました。テスト再生で接続を確認できます。' : 'APIキーを削除しました。匿名無料枠で動作します。');
-        setStatus(value ? 'TTS.ai APIキーをこの端末に保存しました。' : 'TTS.ai APIキーを削除しました。匿名無料枠を使用します。');
-      } catch (error) {
-        refreshKeyStatus('このブラウザーでは保存できませんでした。プライベートモードやサイトデータ設定を確認してください。');
-      }
-    });
-    clearKeyButton.addEventListener('click', () => {
-      keyInput.value = '';
-      try { localStorage.removeItem(TTS_AI_KEY_STORAGE); } catch (error) {}
-      ttsAiPreparedAudio.clear();
-      ttsAiVoicePromise = null;
-      refreshKeyStatus('APIキーを削除しました。匿名無料枠で動作します。');
-      setStatus('TTS.ai APIキーを削除しました。匿名無料枠を使用します。');
-    });
-    keyRow.append(keyInput, revealButton, saveKeyButton, clearKeyButton);
-    refreshKeyStatus();
-    box.append(title, statusNode, note, keyHelp, keyLabel, keyRow, keyStatus);
+    const apiHelp = document.createElement('p');
+    apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
+    apiHelp.append('音声には、住所・電話番号・APIキー登録が不要な無料のWEB版VOICEVOX APIを使います。声は四国めたん（ノーマル）です。無料APIのため、混雑時は合成に時間がかかったり、再試行まで待ち時間が発生することがあります。 ');
+    const apiLink = document.createElement('a');
+    apiLink.href = 'https://voicevox.su-shiki.com/su-shikiapis/ttsquest/';
+    apiLink.target = '_blank';
+    apiLink.rel = 'noopener noreferrer';
+    apiLink.textContent = 'APIの説明';
+    apiLink.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:3px';
+    apiHelp.append(apiLink);
+    try { localStorage.removeItem('pc-tts-ai-api-key-v1'); } catch (error) {}
+    box.append(title, statusNode, note, apiHelp);
     host.appendChild(box);
   }
   function start() {
