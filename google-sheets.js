@@ -253,8 +253,8 @@
 
   function normalizeScheduleDate(value) {
     const raw = String(value == null ? '' : value).trim();
-    let match = raw.match(/^(\\d{4})[年/.-](\\d{1,2})[月/.-](\\d{1,2})日?$/);
-    if (!match) match = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:T.*)?$/);
+    let match = raw.match(/^(\d{4})[年/.-](\d{1,2})[月/.-](\d{1,2})日?$/);
+    if (!match) match = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/);
     if (!match) return '';
     return match[1] + '-' + String(Number(match[2])).padStart(2, '0') + '-' + String(Number(match[3])).padStart(2, '0');
   }
@@ -396,7 +396,7 @@
       }
 
       renderScheduleSheetNotice(null, 'Googleログインを確認しました。今日の予定シートを作成しています…');
-      const response = await fetch(SHEETS_API.replace(/\\/$/, ''), {
+      const response = await fetch(SHEETS_API.replace(/\/$/, ''), {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
