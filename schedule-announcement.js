@@ -34,14 +34,6 @@
     statusNode.textContent = message;
     statusNode.style.color = error ? '#b91c1c' : '';
   };
-  function normalizeDate(value) {
-    const raw = String(value == null ? '' : value).trim();
-    if (!raw) return '';
-    let m = raw.match(/^(\d{4})[年/.-](\d{1,2})[月/.-](\d{1,2})日?$/);
-    if (!m && /^\d{4}-\d{2}-\d{2}T/.test(raw)) m = raw.match(/^(\d{4})-(\d{2})-(\d{2})T/);
-    if (!m) return '';
-    return m[1] + '-' + String(Number(m[2])).padStart(2, '0') + '-' + String(Number(m[3])).padStart(2, '0');
-  }
   async function readRows(force = false) {
     if (readInFlight) return cachedRows;
     if (!force && Date.now() - lastReadAt < 60000) return cachedRows;
@@ -50,7 +42,7 @@
     if (!record || !record.spreadsheetId || !token) return cachedRows;
     readInFlight = true;
     try {
-      const range = encodeURIComponent("'予定'!A1:F200");
+      const range = encodeURIComponent("'予定'!A1:E2");
       const response = await fetch(API + encodeURIComponent(record.spreadsheetId) + '/values/' + range, {
         headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
       });
@@ -61,20 +53,23 @@
       return cachedRows;
     } finally { readInFlight = false; }
   }
-  function announcementText(rows, classes) {
-    const special = rows.map(r => {
-      const kind = String(r[2] || '').trim();
-      const detail = String(r[3] || '').trim();
-      if (!detail) return '';
-      return kind === '特別' ? '特別：' + detail : detail;
-    }).filter(Boolean);
-    const plans = rows.map(r => String(r[4] || '').trim()).filter(Boolean);
-    const custom = rows.map(r => String(r[5] || '').trim()).filter(Boolean);
-    const details = [...new Set([...special, ...plans])];
-    if (custom.length) return [...new Set([...custom, ...details])].join('。');
-    const intro = '今日の予定を発表します。今日は' + classes + '時間授業です。';
-    return intro + (details.length ? '今日の予定は、' + details.join('。') + '。' : '');
+  function announcementText(row, classes) {
+    const source = Array.isArray(row) ? row : [];
+    const kind = String(source[1] || '').trim();
+    const specialDetail = String(source[2] || '').trim();
+    const plan = String(source[3] || '').trim();
+    const custom = String(source[4] || '').trim();
+    const details = [];
+    if (specialDetail) details.push(kind === '特別' ? '特別：' + specialDetail : specialDetail);
+    if (plan) details.push(plan);
+    if (custom) details.push(custom);
+    const uniqueDetails = [...new Set(details.filter(Boolean))];
+    const intro = Number.isInteger(classes) && classes >= 1 && classes <= 6
+      ? '今日の予定を発表します。今日は' + classes + '時間授業です。'
+      : '今日の予定を発表します。';
+    return [intro, ...uniqueDetails].filter(Boolean).join('。');
   }
+  window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
   // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
   // speaker=2 は VOICEVOX:四国めたん（ノーマル）。
   const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
@@ -256,29 +251,27 @@
   async function checkAnnouncement() {
     const auth = window.PC_AUTH;
     if (!auth || !auth.currentUser || !tokenNow()) {
-      setStatus('Googleログインすると、スプレッドシートの授業時間数に合わせて発表します。');
+      setStatus('Googleログインすると、今日の予定と授業時間数を発表します。');
       return;
     }
     const record = recordForCurrentUser();
     if (!record || !record.spreadsheetId) {
-      setStatus('予定表スプレッドシートを準備しています…');
+      setStatus('今日の予定シートを準備しています…');
       return;
     }
     try {
       const rows = await readRows();
-      const today = todayKey();
-      const todays = rows.filter(row => normalizeDate(row[0]) === today);
-      if (!todays.length) {
-        setStatus('今日の予定がありません。スプレッドシート「予定」シートのA列に今日の日付を入力してください。');
+      const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
+      if (!row) {
+        setStatus('「予定」シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付は不要です。');
         return;
       }
-      const classes = Number(String(todays.find(r => String(r[1] || '').trim())?.[1] || '').replace(/[^0-9]/g, ''));
+      const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
       if (!Number.isInteger(classes) || classes < 1 || classes > 6) {
-        setStatus('今日の授業時間数をスプレッドシートのB列から1〜6時間で選んでください。');
+        setStatus('「予定」シートのA2で、授業時間数を1〜6時間から選んでください。');
         return;
       }
-      // Existing known anchors: 5 periods end at 14:25, 6 periods at 15:25.
-      // The selected lesson count moves the announcement by one hour per period.
+
       const targetMinutesFromMidnight = (14 * 60 + 25) + (classes - 5) * 60;
       const target = String(Math.floor(targetMinutesFromMidnight / 60)).padStart(2, '0') + ':' +
         String(targetMinutesFromMidnight % 60).padStart(2, '0');
@@ -286,33 +279,35 @@
       const now = new Date();
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       const targetMinutes = hour * 60 + minute;
-      const key = today + ':' + classes + ':' + target;
+      const key = todayKey() + ':' + classes + ':' + target;
+
       if (nowMinutes < targetMinutes) {
         if (targetMinutes - nowMinutes <= 2) {
-          const announcement = announcementText(todays, classes);
-          prepareVoicevoxQuestAudio(announcement).catch(error => console.warn('TTS.ai pre-generation failed; speech will fall back at announcement time', error));
+          prepareVoicevoxQuestAudio(announcementText(row, classes)).catch(error =>
+            console.warn('TTS pre-generation failed; speech will fall back at announcement time', error));
         }
-        setStatus(classes + '時間授業：' + target + 'に音声で発表します。');
+        setStatus(classes + '時間授業：' + target + 'に、今日の予定と持ち物を音声で発表します。');
         return;
       }
       if (nowMinutes > targetMinutes + 20) {
-        setStatus('発表時刻（' + target + '）を過ぎています。明日の予定を確認します。');
+        setStatus('今日の発表時刻（' + target + '）を過ぎています。必要に応じて「持ち物テスト」で今すぐ発表できます。');
         return;
       }
+
       let announced = {};
       try { announced = JSON.parse(localStorage.getItem(ANNOUNCED_KEY) || '{}'); } catch (error) {}
       if (announced[key]) {
         setStatus(classes + '時間授業の発表は本日分を実行済みです。');
         return;
       }
-      const played = await speak(announcementText(todays, classes));
+      const played = await speak(announcementText(row, classes));
       if (played) {
         announced[key] = true;
         localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
       }
     } catch (error) {
-      setStatus('予定表を読み取れませんでした。Googleログインとアクセス許可を確認してください。', true);
-      console.error('Schedule spreadsheet read failed', error);
+      setStatus('今日の予定を読み取れませんでした。Googleログインとアクセス許可を確認してください。', true);
+      console.error('Today schedule read failed', error);
     }
   }
   function installStatus() {
@@ -322,12 +317,12 @@
     box.id = 'pcScheduleAnnouncementStatus';
     box.style.cssText = 'margin-top:12px;padding:10px;border:1px solid #15803d55;border-radius:10px;font-size:12px;line-height:1.65';
     const title = document.createElement('strong');
-    title.textContent = '授業時間数に合わせた音声発表';
+    title.textContent = '今日の予定・持ち物の音声発表';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。日付が今日の行だけを読み込み、有効/無効や開始時刻の列は使いません。特別な予定はD列に書き込めます。ページを開いたままにしてください。';
+    note.textContent = '「予定」シートは1行目が見出し、2行目だけが今日の予定です。A列=授業時間数、B列=区分（通常/特別）、C列=特別の記入、D列=今日の予定・持ち物、E列=発表文。日付入力は不要で、2行目の内容はすべて今日の予定として発表します。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。ページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
     apiHelp.append('音声には、住所・電話番号・APIキー登録が不要な無料のWEB版VOICEVOX APIを使います。声は四国めたん（ノーマル）です。無料APIのため、混雑時は合成に時間がかかったり、再試行まで待ち時間が発生することがあります。 ');
