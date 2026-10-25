@@ -76,12 +76,23 @@
     return intro + (details.length ? '今日の予定は、' + details.join('。') + '。' : '');
   }
   const TTS_AI_BASE = 'https://api.tts.ai/v1';
+  const TTS_AI_KEY_STORAGE = 'pc-tts-ai-api-key-v1';
+  const getTtsAiApiKey = () => {
+    try { return String(localStorage.getItem(TTS_AI_KEY_STORAGE) || '').trim(); }
+    catch (error) { return ''; }
+  };
+  const ttsAiHeaders = (json = false) => {
+    const headers = json ? { 'Content-Type': 'application/json' } : {};
+    const key = getTtsAiApiKey();
+    if (key) headers.Authorization = 'Bearer ' + key;
+    return headers;
+  };
   let ttsAiVoicePromise = null;
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
   async function ttsAiVoice() {
     if (!ttsAiVoicePromise) {
       ttsAiVoicePromise = (async () => {
-        const response = await fetch(TTS_AI_BASE + '/voices/?model=kokoro&language=ja', { cache: 'no-store' });
+        const response = await fetch(TTS_AI_BASE + '/voices/?model=kokoro&language=ja', { headers: ttsAiHeaders(), cache: 'no-store' });
         if (!response.ok) throw new Error('TTS.aiの日本語音声一覧を取得できませんでした（HTTP ' + response.status + '）。');
         const data = await response.json();
         const voices = Array.isArray(data.voices) ? data.voices : [];
@@ -122,7 +133,7 @@
     if (!jobId) throw new Error('TTS.aiの応答に音声URLまたは生成IDがありません。');
     for (let attempt = 0; attempt < 45; attempt++) {
       await sleep(1200);
-      const poll = await fetch(TTS_AI_BASE + '/speech/results/?uuid=' + encodeURIComponent(jobId), { cache: 'no-store' });
+      const poll = await fetch(TTS_AI_BASE + '/speech/results/?uuid=' + encodeURIComponent(jobId), { headers: ttsAiHeaders(), cache: 'no-store' });
       if (!poll.ok) {
         const detail = await poll.text().catch(() => '');
         throw new Error('TTS.aiの生成結果を確認できません（HTTP ' + poll.status + '）：' + detail.slice(0, 120));
@@ -145,7 +156,7 @@
     const voice = await ttsAiVoice();
     const response = await fetch(TTS_AI_BASE + '/tts/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ttsAiHeaders(true),
       body: JSON.stringify({ model: 'kokoro', language: 'ja', voice, text, format: 'mp3' }),
       cache: 'no-store'
     });
@@ -299,7 +310,73 @@
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
     note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。日付が今日の行だけを読み込み、有効/無効や開始時刻の列は使いません。特別な予定はD列に書き込めます。ページを開いたままにしてください。';
-    box.append(title, statusNode, note);
+    const keyLabel = document.createElement('label');
+    keyLabel.textContent = 'TTS.ai APIキー（任意）';
+    keyLabel.style.cssText = 'display:block;margin-top:12px;font-size:12px;font-weight:700';
+    const keyRow = document.createElement('div');
+    keyRow.style.cssText = 'display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;margin-top:5px';
+    const keyInput = document.createElement('input');
+    keyInput.id = 'pcTtsAiApiKeyInput';
+    keyInput.type = 'password';
+    keyInput.autocomplete = 'off';
+    keyInput.spellcheck = false;
+    keyInput.placeholder = 'sk-tts-…';
+    keyInput.value = getTtsAiApiKey();
+    keyInput.style.cssText = 'flex:1 1 220px;min-width:0;box-sizing:border-box;padding:8px 10px;border:1px solid #9ca3af;border-radius:8px;background:var(--input-bg, #fff);color:var(--text-color, #111827);font:inherit;font-size:12px';
+    const revealButton = document.createElement('button');
+    revealButton.type = 'button';
+    revealButton.textContent = '表示';
+    revealButton.style.cssText = 'padding:7px 10px;border:1px solid #9ca3af;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
+    revealButton.addEventListener('click', () => {
+      const visible = keyInput.type === 'password';
+      keyInput.type = visible ? 'text' : 'password';
+      revealButton.textContent = visible ? '隠す' : '表示';
+    });
+    const saveKeyButton = document.createElement('button');
+    saveKeyButton.type = 'button';
+    saveKeyButton.textContent = 'キーを保存';
+    saveKeyButton.style.cssText = 'padding:7px 10px;border:1px solid #15803d;border-radius:8px;background:#15803d;color:white;font:inherit;font-size:12px;font-weight:700;cursor:pointer';
+    const clearKeyButton = document.createElement('button');
+    clearKeyButton.type = 'button';
+    clearKeyButton.textContent = '削除';
+    clearKeyButton.style.cssText = 'padding:7px 10px;border:1px solid #9ca3af;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
+    const keyStatus = document.createElement('p');
+    keyStatus.id = 'pcTtsAiApiKeyStatus';
+    keyStatus.style.cssText = 'margin:5px 0 0;opacity:.8;font-size:11px;line-height:1.55';
+    const refreshKeyStatus = (message = '') => {
+      const stored = Boolean(getTtsAiApiKey());
+      keyStatus.textContent = message || (stored
+        ? 'APIキーをこの端末のブラウザーに保存済み。音声APIの呼び出し時にだけTTS.aiへ送信します。'
+        : 'キー未登録の場合はTTS.aiの匿名無料枠を使用します。アカウントの無料文字数を使うには、TTS.aiのAccount SettingsでAPIキーを作成して保存してください。');
+    };
+    saveKeyButton.addEventListener('click', () => {
+      const value = keyInput.value.trim();
+      if (value && !/^sk-tts-/i.test(value)) {
+        refreshKeyStatus('APIキーの形式を確認してください。TTS.aiのAPIキーは通常 sk-tts- で始まります。');
+        return;
+      }
+      try {
+        if (value) localStorage.setItem(TTS_AI_KEY_STORAGE, value);
+        else localStorage.removeItem(TTS_AI_KEY_STORAGE);
+        ttsAiPreparedAudio.clear();
+        ttsAiVoicePromise = null;
+        refreshKeyStatus(value ? 'APIキーをこの端末に保存しました。テスト再生で接続を確認できます。' : 'APIキーを削除しました。匿名無料枠で動作します。');
+        setStatus(value ? 'TTS.ai APIキーをこの端末に保存しました。' : 'TTS.ai APIキーを削除しました。匿名無料枠を使用します。');
+      } catch (error) {
+        refreshKeyStatus('このブラウザーでは保存できませんでした。プライベートモードやサイトデータ設定を確認してください。');
+      }
+    });
+    clearKeyButton.addEventListener('click', () => {
+      keyInput.value = '';
+      try { localStorage.removeItem(TTS_AI_KEY_STORAGE); } catch (error) {}
+      ttsAiPreparedAudio.clear();
+      ttsAiVoicePromise = null;
+      refreshKeyStatus('APIキーを削除しました。匿名無料枠で動作します。');
+      setStatus('TTS.ai APIキーを削除しました。匿名無料枠を使用します。');
+    });
+    keyRow.append(keyInput, revealButton, saveKeyButton, clearKeyButton);
+    refreshKeyStatus();
+    box.append(title, statusNode, note, keyLabel, keyRow, keyStatus);
     host.appendChild(box);
   }
   function start() {
