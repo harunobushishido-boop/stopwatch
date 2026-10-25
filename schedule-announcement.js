@@ -80,6 +80,7 @@
   const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
   const TTS_QUEST_SPEAKER = 2;
   const voicevoxQuestPreparedAudio = new Map();
+  const VOICEVOX_AUDIO_URL_CACHE_MS = 10 * 60 * 1000;
   let voicevoxQuestNextRequestAt = 0;
   let activeAudio = null;
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -180,14 +181,16 @@
   }
   function prepareVoicevoxQuestAudio(text) {
     const phrase = String(text || '').trim();
-    if (!voicevoxQuestPreparedAudio.has(phrase)) {
-      const pending = requestVoicevoxQuestAudioUrl(phrase).catch(error => {
-        voicevoxQuestPreparedAudio.delete(phrase);
-        throw error;
-      });
-      voicevoxQuestPreparedAudio.set(phrase, pending);
-    }
-    return voicevoxQuestPreparedAudio.get(phrase);
+    const now = Date.now();
+    const cached = voicevoxQuestPreparedAudio.get(phrase);
+    if (cached && now - cached.createdAt < VOICEVOX_AUDIO_URL_CACHE_MS) return cached.promise;
+    const entry = { createdAt: now, promise: null };
+    entry.promise = requestVoicevoxQuestAudioUrl(phrase).catch(error => {
+      if (voicevoxQuestPreparedAudio.get(phrase) === entry) voicevoxQuestPreparedAudio.delete(phrase);
+      throw error;
+    });
+    voicevoxQuestPreparedAudio.set(phrase, entry);
+    return entry.promise;
   }
   async function speakWithVoicevoxQuest(text) {
     const audioUrl = await prepareVoicevoxQuestAudio(text);
