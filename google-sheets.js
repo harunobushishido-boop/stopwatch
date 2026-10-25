@@ -32,7 +32,7 @@
   async function apiRequest(url, options = {}) {
     if (!accessToken || Date.now() >= tokenExpiresAt) {
       accessToken = '';
-      throw new Error('Googleのアクセス許可が期限切れです。「Googleスプレッドシートに接続」を押し直してください。');
+      throw new Error('Googleのアクセス許可が期限切れです。Googleログインをやり直してください。');
     }
     const response = await fetch(url, {
       method: options.method || 'GET',
@@ -67,7 +67,7 @@
       setStatus('未接続');
     } finally {
       connectButton.disabled = false;
-      connectButton.textContent = '予定表スプレッドシートに接続';
+      connectButton.textContent = '今日の予定シートを確認';
     }
   }
 
