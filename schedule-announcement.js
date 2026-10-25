@@ -310,9 +310,19 @@
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
     note.textContent = '「予定」シート：A列=日付（プルダウン）、B列=授業時間数（プルダウン）、C列=通常/特別（プルダウン）、D列=特別の記入、E列=予定、F列=発表文。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。日付が今日の行だけを読み込み、有効/無効や開始時刻の列は使いません。特別な予定はD列に書き込めます。ページを開いたままにしてください。';
+    const keyHelp = document.createElement('p');
+    keyHelp.style.cssText = 'margin:12px 0 0;font-size:12px;line-height:1.6';
+    keyHelp.append('TTS.aiの無料アカウント残高を使う場合は、');
+    const keyHelpLink = document.createElement('a');
+    keyHelpLink.href = 'https://tts.ai/account/';
+    keyHelpLink.target = '_blank';
+    keyHelpLink.rel = 'noopener noreferrer';
+    keyHelpLink.textContent = 'TTS.ai Account Settings';
+    keyHelpLink.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:3px';
+    keyHelp.append(keyHelpLink, ' でAPIキーを作成し、ここに貼り付けてください。');
     const keyLabel = document.createElement('label');
     keyLabel.textContent = 'TTS.ai APIキー（任意）';
-    keyLabel.style.cssText = 'display:block;margin-top:12px;font-size:12px;font-weight:700';
+    keyLabel.style.cssText = 'display:block;margin-top:6px;font-size:12px;font-weight:700';
     const keyRow = document.createElement('div');
     keyRow.style.cssText = 'display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;margin-top:5px';
     const keyInput = document.createElement('input');
@@ -376,7 +386,7 @@
     });
     keyRow.append(keyInput, revealButton, saveKeyButton, clearKeyButton);
     refreshKeyStatus();
-    box.append(title, statusNode, note, keyLabel, keyRow, keyStatus);
+    box.append(title, statusNode, note, keyHelp, keyLabel, keyRow, keyStatus);
     host.appendChild(box);
   }
   function start() {
