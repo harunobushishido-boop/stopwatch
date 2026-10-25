@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ed">
+  <meta name="description" content="6年4組便利タイマーのプライバシーポリシー。データの保存、外部サービス、位置情報の扱いについて説明します。">
+  <title>プライバシーポリシー | 6年4組便利タイマー</title>
+  <style>
+    :root{color-scheme:light;--ink:#242824;--muted:#68716a;--line:#e2e4dc;--accent:#2f6b50;--paper:#fff;--bg:#f5f3ed}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;line-height:1.85}
+    header{padding:26px 20px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.7)}
+    .top,.wrap{width:min(820px,100% - 32px);margin-inline:auto}.brand{font-size:13px;font-weight:750;letter-spacing:.04em;color:var(--accent);text-decoration:none}
+    .top nav{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:13px}.top nav a,.back{color:var(--accent);text-underline-offset:3px}
+    main{padding:34px 0 56px}.eyebrow{font-size:12px;letter-spacing:.13em;font-weight:800;color:var(--accent);text-transform:uppercase;margin:0 0 7px}
+    h1{font-size:clamp(28px,5vw,38px);line-height:1.3;letter-spacing:-.03em;margin:0 0 8px} .updated{font-size:13px;color:var(--muted);margin:0 0 24px}
+    .intro{font-size:16px;background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:24px}
+    article{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,4vw,30px)}
+    h2{font-size:19px;line-height:1.5;margin:28px 0 8px}h2:first-child{margin-top:0}p{margin:8px 0 12px}ul{padding-left:1.35em;margin:8px 0 14px}li{margin:5px 0}
+    a{color:var(--accent)}.notice{font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:16px;margin-top:22px}
+    footer{padding:18px 16px 28px;text-align:center;color:var(--muted);font-size:12px}footer nav{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin-bottom:8px}
+    @media(max-width:520px){.top,.wrap{width:calc(100% - 24px)}header{padding:20px 12px}.intro{padding:16px}article{padding:18px}}
+  </style>
+</head>
+<body>
+  <header><div class="top">
+    <a class="brand" href="./index.html">6年4組便利タイマー</a>
+    <nav aria-label="関連ページ"><a href="./index.html">アプリに戻る</a><a href="./terms.html">利用規約</a></nav>
+  </div></header>
+  <main class="wrap">
+    <p class="eyebrow">Privacy</p>
+    <h1>プライバシーポリシー</h1>
+    <p class="updated">制定日・最終更新日：2026年10月25日</p>
+    <div class="intro">本ポリシーは、「6年4組便利タイマー」（以下「本サービス」）において、情報がどのように保存・利用され、外部サービスに送信される場合があるかを説明するものです。</div>
+    <article>
+      <h2>1. 端末内に保存する情報</h2>
+      <p>本サービスは、ストップウォッチの記録・ラップ、タイマーの設定、表示や配色の設定、選択した背景、天気機能の設定や取得済みデータなどを、ブラウザーのローカルストレージその他の端末内保存領域に保存することがあります。通常、これらの情報は本サービス運営者の独自サーバーには送信されません。</p>
+      <p>ブラウザーのサイトデータを削除すると、端末内の記録や設定が消えることがあります。必要な記録は、利用可能なエクスポート機能やご自身の保存先を利用して保管してください。</p>
+
+      <h2>2. Google連携を利用した場合</h2>
+      <p>GoogleログインやGoogleスプレッドシート連携を利用する場合、連携のためにGoogleアカウントの基本情報（名前・メールアドレス等）や、利用者が許可したGoogle APIへのアクセスが使用されます。利用者が指定したスプレッドシートへの記録の読み書きは、利用者の操作および設定に基づいて行われます。</p>
+      <p>Google連携は任意です。Googleが取得・処理する情報にはGoogleのプライバシーポリシーと利用規約が適用されます。詳しくは <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Googleのプライバシーポリシー</a> を確認してください。</p>
+
+      <h2>3. 天気情報と位置情報</h2>
+      <p>天気機能では、選択した地域や緯度・経度に基づいて、外部の気象情報サービスへデータをリクエストすることがあります。ブラウザーの現在地機能を利用する場合は、端末やブラウザーの許可が必要です。位置情報は天気表示等の要求された機能のために使用され、リクエスト先のサービスに送信される場合があります。</p>
+      <p>気象情報サービス側で取り扱われる情報は、そのサービスのプライバシーポリシー等に従います。現在の公開コードではOpen-Meteoへのリクエストが含まれています。送信先が変更された場合は、本ページも実際の実装に合わせて更新します。</p>
+
+      <h2>4. アクセス情報と外部サービス</h2>
+      <p>本サービスの配信にはGitHub Pagesを利用しています。また、ページにはGoogle Tag Managerの読み込みが含まれています。Google Tag Managerに登録されたタグの設定によっては、アクセス状況、ブラウザーや端末に関する情報などが収集される場合があります。各提供者のサービスに送信される情報は、それぞれのプライバシーポリシー等に従って取り扱われます。</p>
+
+      <h2>5. 利用目的</h2>
+      <ul>
+        <li>時計、タイマー、ストップウォッチおよび関連機能を提供するため</li>
+        <li>利用者が設定した内容や記録を端末内に保持するため</li>
+        <li>利用者が選択した場合に、Google連携や外部APIを通じて要求された機能を実行するため</li>
+        <li>サービスの保守、障害対応、品質改善を行うため</li>
+      </ul>
+
+      <h2>6. 第三者への提供</h2>
+      <p>法令に基づく場合を除き、運営者が端末内の情報を独自に収集して第三者へ販売・提供することはありません。ただし、利用者がGoogle連携や天気機能などの外部サービスを利用した場合、その機能の実行に必要な情報が該当するサービスへ送信されます。</p>
+
+      <h2>7. 安全管理と保存期間</h2>
+      <p>端末内の情報は、利用者がブラウザーのサイトデータを削除するまで保存される場合があります。Googleスプレッドシートなど外部の保存先へ送信した情報は、その保存先で利用者が削除するまで残ることがあります。端末内保存は、端末の共有、紛失、マルウェア、ブラウザー設定等によるリスクを完全に防ぐものではありません。</p>
+
+      <h2>8. 子どもの利用</h2>
+      <p>子どもが本サービスを利用する場合は、必要に応じて保護者または先生などの大人と一緒に、外部サービスへの連携や位置情報の利用を確認してください。公開されるお問い合わせ欄等に、住所、パスワード、個人の連絡先などの情報を書き込まないでください。</p>
+
+      <h2>9. 本ポリシーの変更</h2>
+      <p>機能や法令等の変更に応じて本ポリシーを改定することがあります。重要な変更はこのページに掲載し、ページ上部の更新日を変更します。</p>
+
+      <h2>10. お問い合わせ</h2>
+      <p>本ポリシーに関するお問い合わせは、<a href="https://github.com/harunobushishido-boop/stopwatch/issues" target="_blank" rel="noopener noreferrer">本サービスのGitHub Issues</a>からお寄せください。Issuesは公開される可能性があるため、個人情報や秘密情報を記載しないでください。</p>
+      <p class="notice">この文書は本サービスの機能を説明するための一般的なポリシー案です。サービスの実装・外部連携を変更した際は、実際のデータの取り扱いと本ページの記載を一致させてください。</p>
+    </article>
+  </main>
+  <footer><nav aria-label="フッター"><a href="./index.html">アプリに戻る</a><a href="./terms.html">利用規約</a></nav>© 2026 6年4組便利タイマー</footer>
+</body>
+</html>
