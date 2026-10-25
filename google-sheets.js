@@ -276,7 +276,7 @@
       if (!response.ok) throw new Error(data.error && data.error.message || 'Googleスプレッドシートを更新できませんでした。');
       return data;
     };
-    const readMeta = () => requestJson(base + '?fields=sheets.properties(sheetId,title)');
+    const readMeta = () => requestJson(base + '?fields=sheets(properties(sheetId,title),tables(tableId,name,range))');
     let meta = await readMeta();
     let titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
 
@@ -314,45 +314,41 @@
     const textCol = findHeader([value => value === '発表文'], dateColumn >= 0 ? 5 : 4);
 
     if (dateColumn >= 0) {
-      // 以前の日付別シートは「今日」に一致する行だけを引き継ぐ。過去・未来の行は残さない。
+      // 以前の日付別シートは「今日」に一致する行だけを引き継ぐ。
       const todayOldRow = oldValues.slice(1).find(row => normalizeScheduleDate(row[dateColumn]) === today);
       if (todayOldRow) {
         todayRow = [
-          rowValue(todayOldRow, classCol),
-          rowValue(todayOldRow, kindCol),
-          rowValue(todayOldRow, specialCol),
-          rowValue(todayOldRow, planCol),
-          rowValue(todayOldRow, textCol)
+          rowValue(todayOldRow, classCol), rowValue(todayOldRow, kindCol), rowValue(todayOldRow, specialCol),
+          rowValue(todayOldRow, planCol), rowValue(todayOldRow, textCol)
         ];
       }
     } else if (oldHeader.length) {
-      // 日付なしの新形式では、すでにある1行分の入力内容をそのまま保持する。
       const existingRow = oldValues[1] || [];
       todayRow = [
-        rowValue(existingRow, classCol),
-        rowValue(existingRow, kindCol),
-        rowValue(existingRow, specialCol),
-        rowValue(existingRow, planCol),
-        rowValue(existingRow, textCol)
+        rowValue(existingRow, classCol), rowValue(existingRow, kindCol), rowValue(existingRow, specialCol),
+        rowValue(existingRow, planCol), rowValue(existingRow, textCol)
       ];
     }
 
     const cell = value => ({ userEnteredValue: { stringValue: String(value == null ? '' : value) } });
-    const oneOfList = values => ({
-      condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) },
-      strict: true,
-      showCustomUi: true
+    const listRule = values => ({
+      condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) }
     });
-    // 一括更新で予定シートを「見出し1行＋今日の入力1行」に揃える。
-    // 過去の発表内容と日付列はこのシートから除き、他シートは変更しない。
+    const columnProperties = [
+      { columnIndex: 0, columnName: newHeader[0], columnType: 'DROPDOWN', dataValidationRule: listRule(['1', '2', '3', '4', '5', '6']) },
+      { columnIndex: 1, columnName: newHeader[1], columnType: 'DROPDOWN', dataValidationRule: listRule(['通常', '特別']) },
+      { columnIndex: 2, columnName: newHeader[2], columnType: 'TEXT' },
+      { columnIndex: 3, columnName: newHeader[3], columnType: 'TEXT' },
+      { columnIndex: 4, columnName: newHeader[4], columnType: 'TEXT' }
+    ];
+
+    // まずセルを「見出し1行＋今日の入力1行」に揃える。
+    // 古い日付列・過去の発表内容はこの「予定」シートから除き、別シートは触らない。
     const requests = [
       {
         updateCells: {
           range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
-          rows: [
-            { values: newHeader.map(cell) },
-            { values: todayRow.map(cell) }
-          ],
+          rows: [{ values: newHeader.map(cell) }, { values: todayRow.map(cell) }],
           fields: 'userEnteredValue'
         }
       },
@@ -362,72 +358,39 @@
           cell: { dataValidation: null },
           fields: 'dataValidation'
         }
-      },
-      {
-        setDataValidation: {
-          range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 },
-          rule: oneOfList(['1', '2', '3', '4', '5', '6'])
-        }
-      },
-      {
-        setDataValidation: {
-          range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 },
-          rule: oneOfList(['通常', '特別'])
-        }
       }
     ];
-    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
-  }
 
-  async function autoCreateScheduleSpreadsheet() {
-    if (scheduleCreationPromise) return scheduleCreationPromise;
-    scheduleCreationPromise = (async () => {
-      const auth = window.PC_AUTH;
-      const user = auth && auth.currentUser;
-      const token = auth && auth.getAccessToken && auth.getAccessToken();
-      const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
-      if (!user || !user.email || !token || !expiry || Date.now() >= expiry) return;
-      const email = String(user.email).trim().toLowerCase();
-      const existing = scheduleSheetRecord(email);
-      if (existing && existing.spreadsheetId && existing.url) {
-        await ensureScheduleSpreadsheetLayout(existing, token);
-        renderScheduleSheetNotice(existing, '今日の予定シートを確認しました。');
-        return existing;
-      }
-
-      renderScheduleSheetNotice(null, 'Googleログインを確認しました。今日の予定シートを作成しています…');
-      const response = await fetch(SHEETS_API.replace(/\/$/, ''), {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          properties: { title: '6年4組便利タイマー 今日の予定', locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
-          sheets: [{ properties: { title: '予定' } }]
-        }),
-        cache: 'no-store'
+    // Google Sheetsのテーブル列タイプ DROPDOWN は、画像のようなチップ型プルダウンを作成する。
+    // 既存のテーブルが同じ予定シートにある場合は新しいテーブルを重ねて作らない。
+    const existingTables = Array.isArray(scheduleSheet.tables) ? scheduleSheet.tables : [];
+    const overlappingTable = existingTables.find(table => {
+      const range = table.range || {};
+      return Number(range.startRowIndex || 0) < 2 &&
+        Number(range.endRowIndex || 0) > 0 &&
+        Number(range.startColumnIndex || 0) < 5 &&
+        Number(range.endColumnIndex || 0) > 0;
+    });
+    if (!overlappingTable) {
+      requests.push({
+        addTable: {
+          table: {
+            name: 'TodaySchedule',
+            range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 5 },
+            columnProperties
+          }
+        }
       });
-      let data = {};
-      try { data = await response.json(); } catch (error) {}
-      if (!response.ok || !data.spreadsheetId || !data.spreadsheetUrl) {
-        throw new Error(data && data.error && data.error.message || '今日の予定スプレッドシートを作成できませんでした。Google Sheets APIとアクセス許可を確認してください。');
-      }
-
-      const record = {
-        spreadsheetId: data.spreadsheetId,
-        url: data.spreadsheetUrl,
-        sheetName: '予定',
-        createdAt: new Date().toISOString()
-      };
-      saveScheduleSheetRecord(email, record);
-      await ensureScheduleSpreadsheetLayout(record, token);
-      renderScheduleSheetNotice(record, '準備完了です。予定シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付は不要です。');
-      return record;
-    })().catch(error => {
-      renderScheduleSheetNotice(null, '今日の予定シートの作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
-      if (errorNode) setError(error.message || '予定シートの作成に失敗しました。');
-      console.error('Automatic today schedule spreadsheet creation failed', error);
-      return null;
-    }).finally(() => { scheduleCreationPromise = null; });
-    return scheduleCreationPromise;
+    } else {
+      // 同じ範囲のテーブルがある場合、その列タイプをチップ型プルダウンに整える。
+      requests.push({
+        updateTable: {
+          table: { tableId: overlappingTable.tableId, columnProperties },
+          fields: 'columnProperties'
+        }
+      });
+    }
+    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
   }
 
   function renderScheduleSheetNotice(record, message) {
