@@ -1,25 +1,17 @@
 (() => {
   'use strict';
 
-  const CONFIG_KEY = 'pc-google-sheets-config-v1';
-  const TOKEN_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
   let accessToken = '';
   let tokenExpiresAt = 0;
-  let tokenClient = null;
-  let syncButton, statusNode, errorNode, urlInput, tabInput, connectButton, testButton, testOutput;
+  let statusNode, errorNode, connectButton, testButton, testOutput;
 
-  const loadConfig = () => ({ clientId: configuredClientId(), spreadsheetUrl: '', sheetName: '記録' });
   function activeScheduleRecord() {
     try {
       const email = String(window.PC_AUTH && window.PC_AUTH.currentUser && window.PC_AUTH.currentUser.email || '').trim().toLowerCase();
       if (!email) return null;
       return JSON.parse(localStorage.getItem('pc-schedule-sheet-v1') || '{}')[email] || null;
     } catch (error) { return null; }
-  }
-
-  function configuredClientId() {
-    return String(window.PC_GOOGLE_LOGIN_CONFIG && window.PC_GOOGLE_LOGIN_CONFIG.clientId || '').trim();
   }
 
   const setStatus = (message) => { if (statusNode) statusNode.textContent = message; };
@@ -36,75 +28,6 @@
     b.style.cssText = 'padding:9px 13px;border:1px solid ' + (primary ? '#15803d' : 'currentColor') + ';border-radius:10px;background:' + (primary ? '#15803d' : 'transparent') + ';color:' + (primary ? '#fff' : 'inherit') + ';font:inherit;font-size:13px;font-weight:600;cursor:pointer';
     return b;
   };
-
-  const makeInput = (labelText, placeholder, value) => {
-    const wrap = document.createElement('label');
-    wrap.style.cssText = 'display:flex;flex-direction:column;gap:5px;font-size:12px;min-width:0;flex:1 1 220px';
-    const label = document.createElement('span');
-    label.textContent = labelText;
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = value || '';
-    input.placeholder = placeholder;
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #0000002b;border-radius:9px;background:var(--clk-bg,#fff);color:inherit;font:inherit;font-size:12px';
-    wrap.append(label, input);
-    return { wrap, input };
-  };
-
-  function spreadsheetId(value) {
-    const text = String(value || '').trim();
-    if (/^[\w-]{20,}$/.test(text)) return text;
-    const match = text.match(/\/spreadsheets\/d\/([\w-]+)/);
-    return match ? match[1] : '';
-  }
-
-  function readFormConfig() {
-    return {
-      clientId: configuredClientId(),
-      spreadsheetUrl: String(urlInput && urlInput.value || '').trim(),
-      sheetName: String(tabInput && tabInput.value || '').trim() || '記録'
-    };
-  }
-
-  function storeConfig() {
-    const config = readFormConfig();
-    if (!config.clientId.endsWith('.apps.googleusercontent.com')) {
-      setError('Googleログイン用クライアントIDが未設定です。google-login-config.js の設定を確認してください。');
-      return false;
-    }
-    if (!spreadsheetId(config.spreadsheetUrl)) {
-      setError('GoogleスプレッドシートのURLまたはIDが正しくありません。');
-      return false;
-    }
-    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
-    catch (error) { setError('設定をこのブラウザーに保存できませんでした。'); return false; }
-    setError('');
-    setStatus('連携設定を保存しました。次にGoogleアカウントのアクセス許可を行ってください。');
-    tokenClient = null;
-    accessToken = '';
-    syncButton.disabled = true;
-    return true;
-  }
-
-  function loadGoogleIdentity() {
-    if (window.google && window.google.accounts && window.google.accounts.oauth2) return Promise.resolve();
-    if (window.__pcGoogleIdentityPromise) return window.__pcGoogleIdentityPromise;
-    window.__pcGoogleIdentityPromise = new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        if (window.google && window.google.accounts && window.google.accounts.oauth2) resolve();
-        else reject(new Error('Google Identity Servicesを初期化できませんでした。'));
-      };
-      script.onerror = () => reject(new Error('Googleの認証ライブラリを読み込めませんでした。ネットワークを確認してください。'));
-      document.head.appendChild(script);
-    });
-    return window.__pcGoogleIdentityPromise;
-  }
 
   async function apiRequest(url, options = {}) {
     if (!accessToken || Date.now() >= tokenExpiresAt) {
@@ -126,22 +49,6 @@
     return data || {};
   }
 
-  function rangeUrl(id, range, action) {
-    const base = SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range);
-    return action ? base + ':' + action + '?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS' : base;
-  }
-
-  async function appendValues(id, range, values) {
-    return apiRequest(rangeUrl(id, range, 'append'), { method: 'POST', body: { values } });
-  }
-
-  function durationLabel(ms) {
-    const n = Math.max(0, Math.floor(Number(ms) || 0));
-    return String(Math.floor(n / 60000)).padStart(2, '0') + ':' +
-      String(Math.floor(n / 1000) % 60).padStart(2, '0') + '.' +
-      String(Math.floor(n / 10) % 100).padStart(2, '0');
-  }
-
   async function connect() {
     setError('');
     connectButton.disabled = true;
@@ -154,69 +61,13 @@
       if (!token || !expiry || Date.now() >= expiry) throw new Error('先にGoogleアカウントでログインしてアクセスを許可してください。');
       if (!record || !record.spreadsheetId) throw new Error('予定表スプレッドシートがまだありません。Googleログイン後、作成が終わるまでお待ちください。');
       accessToken = token; tokenExpiresAt = expiry;
-      setStatus('自動作成した予定表スプレッドシートに接続しました。');
-      syncButton.disabled = false;
+      setStatus('今日の予定シートに接続しました。');
     } catch (error) {
       setError(error.message || 'Googleスプレッドシートに接続できませんでした。');
       setStatus('未接続');
     } finally {
       connectButton.disabled = false;
       connectButton.textContent = '予定表スプレッドシートに接続';
-    }
-  }
-
-  async function syncHistory() {
-    setError('');
-    if (!accessToken || Date.now() >= tokenExpiresAt) {
-      accessToken = '';
-      syncButton.disabled = true;
-      setError('先に「Googleスプレッドシートに接続」を押してアクセスを許可してください。');
-      return;
-    }
-    const record = activeScheduleRecord();
-    const id = record && record.spreadsheetId;
-    const sheetName = '記録';
-    if (!id) { setError('自動作成された予定表スプレッドシートがありません。Googleログインを確認してください。'); return; }
-    const history = window.PC_STOPWATCH_HISTORY && window.PC_STOPWATCH_HISTORY.getAll
-      ? await window.PC_STOPWATCH_HISTORY.getAll()
-      : [];
-    if (!history.length) { setStatus('送信できるストップウォッチ履歴がまだありません。'); return; }
-
-    syncButton.disabled = true;
-    syncButton.textContent = '履歴を同期中…';
-    try {
-      const tabRange = "'" + sheetName.replace(/'/g, "''") + "'";
-      const first = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(tabRange + '!A1:F1'));
-      if (!Array.isArray(first.values) || !first.values.length || !first.values[0].some((cell) => String(cell || '').trim())) {
-        await appendValues(id, tabRange + '!A:F', [[
-          '記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）'
-        ]]);
-      }
-
-      const column = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(tabRange + '!B:B'));
-      const existingIds = new Set((column.values || []).map((row) => String(row[0] || '')).filter(Boolean));
-      const uniqueHistory = history.filter((record) => record && record.id && !existingIds.has(String(record.id)));
-      if (!uniqueHistory.length) {
-        setStatus('このスプレッドシートには、現在のストップウォッチ履歴は同期済みです。');
-        return;
-      }
-
-      const rows = uniqueHistory.map((record) => [
-        new Date(record.at).toLocaleString('ja-JP', { hour12: false }),
-        String(record.id),
-        Math.round(Number(record.elapsed) || 0),
-        durationLabel(record.elapsed),
-        Array.isArray(record.laps) ? record.laps.length : 0,
-        JSON.stringify(Array.isArray(record.laps) ? record.laps : [])
-      ]);
-      await appendValues(id, tabRange + '!A:F', rows);
-      setStatus(uniqueHistory.length + '件のストップウォッチ履歴をスプレッドシートに追加しました。');
-    } catch (error) {
-      setError('同期できませんでした。自動作成されたスプレッドシートの編集権限とGoogle Sheets APIの設定を確認してください。詳細：' + (error.message || '不明なエラー'));
-      console.error('Google Sheets history sync failed', error);
-    } finally {
-      syncButton.disabled = !accessToken;
-      syncButton.textContent = 'ストップウォッチ履歴を同期';
     }
   }
 
@@ -320,38 +171,57 @@
     const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
     const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
     if (!id) {
-      setError('自動作成された予定表スプレッドシートがありません。Googleログインを確認してください。');
+      setError('今日の予定スプレッドシートがありません。Googleログインを確認してください。');
       return;
     }
     if (!token || !expiry || Date.now() >= expiry) {
       setError('先にGoogleアカウントでログインして、アクセスを許可してください。');
       return;
     }
+
     accessToken = token;
     tokenExpiresAt = expiry;
     testButton.disabled = true;
-    testButton.textContent = '持ち物を読み取り中…';
-    setStatus('スプレッドシートの情報を読み取っています。');
+    testButton.textContent = '今日の予定を読み取り中…';
+    setStatus('今日の予定と持ち物を読み取っています。');
     if (testOutput) testOutput.replaceChildren();
+
     try {
-      const meta = await apiRequest(SHEETS_API + encodeURIComponent(id) + '?fields=properties.title,sheets.properties.title');
-      const sheets = (meta.sheets || []).map((sheet) => sheet.properties && sheet.properties.title).filter(Boolean);
-      if (!sheets.length) throw new Error('読み取れるシートが見つかりませんでした。');
-      const results = [];
-      for (const title of sheets) {
-        const range = escapeSheetName(title) + '!A1:Z200';
-        const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
-        results.push({ title, values: (data.values || []).filter((row) => row.some((cell) => String(cell == null ? '' : cell).trim())) });
+      await ensureScheduleSpreadsheetLayout(record, token);
+      const range = escapeSheetName('予定') + '!A1:E2';
+      const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
+      const values = Array.isArray(data.values) ? data.values : [];
+      const visibleRows = values.filter(row => (row || []).some(cell => String(cell == null ? '' : cell).trim()));
+      renderPackingTest([{ title: '今日の予定', values: visibleRows }]);
+
+      const row = values[1] || [];
+      if (!row.some(cell => String(cell == null ? '' : cell).trim())) {
+        throw new Error('「予定」シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付の入力は不要です。');
       }
-      renderPackingTest(results);
-      setStatus('テスト成功：スプレッドシートの内容を読み取り、表示しました。');
+      const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
+      if (!Number.isInteger(classes) || classes < 1 || classes > 6) {
+        throw new Error('「予定」シートのA2で、授業時間数を1〜6時間から選んでください。');
+      }
+
+      const buildText = window.PC_SCHEDULE_ANNOUNCEMENT_TEXT;
+      const speak = window.PC_SCHEDULE_SPEAK;
+      if (typeof buildText !== 'function' || typeof speak !== 'function') {
+        throw new Error('音声発表機能がまだ準備できていません。ページを再読み込みして再試行してください。');
+      }
+      const announcement = buildText(row, classes);
+      setStatus('今日の予定を音声で発表しています…');
+      const played = await speak(announcement);
+      if (!played) {
+        throw new Error('予定は読み取れましたが、音声を再生できませんでした。ブラウザーの音量とネット接続を確認してください。');
+      }
+      setStatus('成功：今日の授業時間数・予定・持ち物を音声で発表しました。');
     } catch (error) {
-      setError('持ち物テストに失敗しました。URL・共有権限・Google Sheets APIの設定を確認してください。詳細：' + (error.message || '不明なエラー'));
+      setError('今日の予定の読み取り・発表に失敗しました。' + (error.message || '不明なエラー'));
       setStatus('テストに失敗しました');
-      console.error('Packing reminder test failed', error);
+      console.error('Today schedule announcement test failed', error);
     } finally {
       testButton.disabled = false;
-      testButton.textContent = '忘れ物防止テスト';
+      testButton.textContent = '持ち物テスト（今日の予定を発表）';
     }
   }
 
@@ -372,136 +242,141 @@
     localStorage.setItem(SCHEDULE_SHEET_STORAGE_KEY, JSON.stringify(all));
   }
 
+  function currentTokyoDateKey() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date());
+    const values = {};
+    parts.forEach(part => { values[part.type] = part.value; });
+    return values.year + '-' + values.month + '-' + values.day;
+  }
+
+  function normalizeScheduleDate(value) {
+    const raw = String(value == null ? '' : value).trim();
+    let match = raw.match(/^(\\d{4})[年/.-](\\d{1,2})[月/.-](\\d{1,2})日?$/);
+    if (!match) match = raw.match(/^(\\d{4})-(\\d{2})-(\\d{2})(?:T.*)?$/);
+    if (!match) return '';
+    return match[1] + '-' + String(Number(match[2])).padStart(2, '0') + '-' + String(Number(match[3])).padStart(2, '0');
+  }
+
+  function rowValue(row, index) {
+    return index >= 0 && row && row[index] != null ? String(row[index]) : '';
+  }
+
   async function ensureScheduleSpreadsheetLayout(record, token) {
     const base = SHEETS_API + encodeURIComponent(record.spreadsheetId);
-    const readMeta = async () => {
-      const response = await fetch(base + '?fields=sheets.properties(sheetId,title)', {
-        headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
+    const requestJson = async (url, options = {}) => {
+      const response = await fetch(url, {
+        method: options.method || 'GET',
+        headers: Object.assign({ Authorization: 'Bearer ' + token }, options.body ? { 'Content-Type': 'application/json' } : {}),
+        body: options.body ? JSON.stringify(options.body) : undefined,
+        cache: 'no-store'
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error && data.error.message || 'スプレッドシートのシート情報を確認できませんでした。');
+      if (!response.ok) throw new Error(data.error && data.error.message || 'Googleスプレッドシートを更新できませんでした。');
       return data;
     };
+    const readMeta = () => requestJson(base + '?fields=sheets.properties(sheetId,title)');
     let meta = await readMeta();
-    let titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
-    const requests = [];
-    if (!titles.has('予定')) requests.push({ addSheet: { properties: { title: '予定' } } });
-    if (!titles.has('記録')) requests.push({ addSheet: { properties: { title: '記録' } } });
-    if (requests.length) {
-      const response = await fetch(base + ':batchUpdate', {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requests }), cache: 'no-store'
+    let titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
+
+    // 新しく作るのは「予定」シートだけ。既存の「記録」シートは削除も変更もしない。
+    if (!titles.has('予定')) {
+      await requestJson(base + ':batchUpdate', {
+        method: 'POST',
+        body: { requests: [{ addSheet: { properties: { title: '予定' } } }] }
       });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error && data.error.message || '必要なシートを追加できませんでした。');
       meta = await readMeta();
-      titles = new Set((meta.sheets || []).map(s => s.properties && s.properties.title).filter(Boolean));
+      titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
     }
 
-    const newHeader = ['日付', '授業時間数', '特別', '特別の記入', '予定', '発表文'];
-    const oldRange = encodeURIComponent("'予定'!A1:G200");
-    const oldResponse = await fetch(base + '/values/' + oldRange, {
-      headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
-    });
-    const oldData = await oldResponse.json().catch(() => ({}));
-    if (!oldResponse.ok) throw new Error(oldData.error && oldData.error.message || '予定シートの内容を読み取れませんでした。');
-    const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
-    const headers = oldValues[0] || [];
-    const oldHeaderText = headers.map(v => String(v || '').trim());
-    const needsMigration = oldHeaderText.some(v => ['開始時刻', '終了時刻', '有効'].includes(v));
-    if (needsMigration && oldValues.length) {
-      const backupTitle = '予定_旧形式バックアップ';
-      if (!titles.has(backupTitle)) {
-        const addBackup = await fetch(base + ':batchUpdate', {
-          method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requests: [{ addSheet: { properties: { title: backupTitle } } }] }),
-          cache: 'no-store'
-        });
-        const addData = await addBackup.json().catch(() => ({}));
-        if (!addBackup.ok) throw new Error(addData.error && addData.error.message || '旧予定表のバックアップ用シートを作成できませんでした。');
-        const backupUrl = base + '/values/' + encodeURIComponent("'" + backupTitle + "'!A1:G" + Math.max(1, oldValues.length)) + '?valueInputOption=RAW';
-        const backupResponse = await fetch(backupUrl, {
-          method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ values: oldValues }), cache: 'no-store'
-        });
-        const backupData = await backupResponse.json().catch(() => ({}));
-        if (!backupResponse.ok) throw new Error(backupData.error && backupData.error.message || '旧予定表のバックアップに失敗したため、元データを変更しませんでした。');
-        titles.add(backupTitle);
-      }
-
-      const migrated = [newHeader, ...oldValues.slice(1).map(row => [
-        String(row[0] == null ? '' : row[0]),
-        String(row[1] == null ? '' : row[1]),
-        '',
-        '',
-        String(row[4] == null ? '' : row[4]),
-        String(row[5] == null ? '' : row[5])
-      ])];
-      const writeUrl = base + '/values/' + encodeURIComponent("'予定'!A1:F" + migrated.length) + '?valueInputOption=USER_ENTERED';
-      const writeResponse = await fetch(writeUrl, {
-        method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: migrated }), cache: 'no-store'
-      });
-      const writeData = await writeResponse.json().catch(() => ({}));
-      if (!writeResponse.ok) throw new Error(writeData.error && writeData.error.message || '予定表の新しい列構成へ移行できませんでした。旧データはバックアップシートに残しています。');
-
-      const clearUrl = base + '/values/' + encodeURIComponent("'予定'!G:G") + ':clear';
-      const clearResponse = await fetch(clearUrl, {
-        method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: '{}', cache: 'no-store'
-      });
-      if (!clearResponse.ok) {
-        const clearData = await clearResponse.json().catch(() => ({}));
-        throw new Error(clearData.error && clearData.error.message || '旧「有効」列のクリアに失敗しました。予定表のバックアップは残っています。');
-      }
-    } else if (oldHeaderText.join('|') !== newHeader.join('|')) {
-      const writeUrl = base + '/values/' + encodeURIComponent("'予定'!A1:F1") + '?valueInputOption=USER_ENTERED';
-      const writeResponse = await fetch(writeUrl, {
-        method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [newHeader] }), cache: 'no-store'
-      });
-      const writeData = await writeResponse.json().catch(() => ({}));
-      if (!writeResponse.ok) throw new Error(writeData.error && writeData.error.message || '予定シートの見出しを設定できませんでした。');
-    }
-
-    const recordHeader = ['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）'];
-    const historyUrl = base + '/values/' + encodeURIComponent("'記録'!A1:F1") + '?valueInputOption=USER_ENTERED';
-    const historyResponse = await fetch(historyUrl, {
-      method: 'PUT', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: [recordHeader] }), cache: 'no-store'
-    });
-    const historyData = await historyResponse.json().catch(() => ({}));
-    if (!historyResponse.ok) throw new Error(historyData.error && historyData.error.message || '記録シートの見出しを設定できませんでした。');
-
-    meta = await readMeta();
-    const scheduleSheet = (meta.sheets || []).find(sh => sh.properties && sh.properties.title === '予定');
+    const scheduleSheet = (meta.sheets || []).find(sheet => sheet.properties && sheet.properties.title === '予定');
     const sheetId = scheduleSheet && scheduleSheet.properties && scheduleSheet.properties.sheetId;
-    if (!Number.isInteger(sheetId)) throw new Error('予定シートのIDを取得できませんでした。');
-    const dateOptions = [];
-    const now = new Date();
-    const baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    for (let i = 0; i < 31; i++) {
-      const d = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + i);
-      dateOptions.push(String(d.getFullYear()).padStart(4, '0') + '/' +
-        String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'));
+    if (!Number.isInteger(sheetId)) throw new Error('今日の予定シートのIDを取得できませんでした。');
+
+    const oldData = await requestJson(base + '/values/' + encodeURIComponent("'予定'!A1:Z200"));
+    const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
+    const oldHeader = (oldValues[0] || []).map(value => String(value == null ? '' : value).trim());
+    const newHeader = ['授業時間数', '区分（通常/特別）', '特別の記入', '今日の予定・持ち物', '発表文'];
+    const today = currentTokyoDateKey();
+    let todayRow = ['', '', '', '', ''];
+
+    const findHeader = (tests, fallback) => {
+      const index = oldHeader.findIndex(value => tests.some(test => test(value)));
+      return index >= 0 ? index : fallback;
+    };
+    const isDateColumn = value => value === '日付' || value === '実施日' || value === '予定日';
+    const dateColumn = oldHeader.findIndex(isDateColumn);
+    const classCol = findHeader([value => value === '授業時間数'], dateColumn >= 0 ? 1 : 0);
+    const kindCol = findHeader([value => value === '区分（通常/特別）' || value === '区分' || value === '特別'], dateColumn >= 0 ? 2 : 1);
+    const specialCol = findHeader([value => value === '特別の記入'], dateColumn >= 0 ? 3 : 2);
+    const planCol = findHeader([value => value === '今日の予定・持ち物' || value === '予定' || value === '持ち物'], dateColumn >= 0 ? 4 : 3);
+    const textCol = findHeader([value => value === '発表文'], dateColumn >= 0 ? 5 : 4);
+
+    if (dateColumn >= 0) {
+      // 以前の日付別シートは「今日」に一致する行だけを引き継ぐ。過去・未来の行は残さない。
+      const todayOldRow = oldValues.slice(1).find(row => normalizeScheduleDate(row[dateColumn]) === today);
+      if (todayOldRow) {
+        todayRow = [
+          rowValue(todayOldRow, classCol),
+          rowValue(todayOldRow, kindCol),
+          rowValue(todayOldRow, specialCol),
+          rowValue(todayOldRow, planCol),
+          rowValue(todayOldRow, textCol)
+        ];
+      }
+    } else if (oldHeader.length) {
+      // 日付なしの新形式では、すでにある1行分の入力内容をそのまま保持する。
+      const existingRow = oldValues[1] || [];
+      todayRow = [
+        rowValue(existingRow, classCol),
+        rowValue(existingRow, kindCol),
+        rowValue(existingRow, specialCol),
+        rowValue(existingRow, planCol),
+        rowValue(existingRow, textCol)
+      ];
     }
+
+    const cell = value => ({ userEnteredValue: { stringValue: String(value == null ? '' : value) } });
     const oneOfList = values => ({
       condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) },
       strict: true,
       showCustomUi: true
     });
-    const validationRequests = [
-      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 }, rule: oneOfList(dateOptions) } },
-      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 }, rule: oneOfList(['1', '2', '3', '4', '5', '6']) } },
-      { setDataValidation: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 2, endColumnIndex: 3 }, rule: oneOfList(['通常', '特別']) } },
-      { repeatCell: { range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 }, cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'yyyy/mm/dd' } } }, fields: 'userEnteredFormat.numberFormat' } }
+    // 一括更新で予定シートを「見出し1行＋今日の入力1行」に揃える。
+    // 過去の発表内容と日付列はこのシートから除き、他シートは変更しない。
+    const requests = [
+      {
+        updateCells: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
+          rows: [
+            { values: newHeader.map(cell) },
+            { values: todayRow.map(cell) }
+          ],
+          fields: 'userEnteredValue'
+        }
+      },
+      {
+        repeatCell: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
+          cell: { dataValidation: null },
+          fields: 'dataValidation'
+        }
+      },
+      {
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 },
+          rule: oneOfList(['1', '2', '3', '4', '5', '6'])
+        }
+      },
+      {
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 1, endColumnIndex: 2 },
+          rule: oneOfList(['通常', '特別'])
+        }
+      }
     ];
-    const validationResponse = await fetch(base + ':batchUpdate', {
-      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests: validationRequests }), cache: 'no-store'
-    });
-    const validationData = await validationResponse.json().catch(() => ({}));
-    if (!validationResponse.ok) throw new Error(validationData.error && validationData.error.message || '予定表のプルダウン設定に失敗しました。');
+    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
   }
 
   async function autoCreateScheduleSpreadsheet() {
@@ -516,24 +391,24 @@
       const existing = scheduleSheetRecord(email);
       if (existing && existing.spreadsheetId && existing.url) {
         await ensureScheduleSpreadsheetLayout(existing, token);
-        renderScheduleSheetNotice(existing, '予定表と記録シートを確認しました。');
+        renderScheduleSheetNotice(existing, '今日の予定シートを確認しました。');
         return existing;
       }
 
-      renderScheduleSheetNotice(null, 'Googleログインを確認しました。予定表スプレッドシートを自動作成しています…');
-      const response = await fetch(SHEETS_API.replace(/\/$/, ''), {
+      renderScheduleSheetNotice(null, 'Googleログインを確認しました。今日の予定シートを作成しています…');
+      const response = await fetch(SHEETS_API.replace(/\\/$/, ''), {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          properties: { title: '6年4組便利タイマー 今日の予定表', locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
-          sheets: [{ properties: { title: '予定' } }, { properties: { title: '記録' } }]
+          properties: { title: '6年4組便利タイマー 今日の予定', locale: 'ja_JP', timeZone: 'Asia/Tokyo' },
+          sheets: [{ properties: { title: '予定' } }]
         }),
         cache: 'no-store'
       });
       let data = {};
       try { data = await response.json(); } catch (error) {}
       if (!response.ok || !data.spreadsheetId || !data.spreadsheetUrl) {
-        throw new Error(data && data.error && data.error.message || '予定表スプレッドシートを作成できませんでした。Google Sheets APIとアクセス許可を確認してください。');
+        throw new Error(data && data.error && data.error.message || '今日の予定スプレッドシートを作成できませんでした。Google Sheets APIとアクセス許可を確認してください。');
       }
 
       const record = {
@@ -543,45 +418,13 @@
         createdAt: new Date().toISOString()
       };
       saveScheduleSheetRecord(email, record);
-
-      const headerUrl = SHEETS_API + encodeURIComponent(record.spreadsheetId) +
-        '/values/' + encodeURIComponent("'予定'!A1:F1") + '?valueInputOption=USER_ENTERED';
-      const headerResponse = await fetch(headerUrl, {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          values: [
-            ['日付', '授業時間数', '特別', '特別の記入', '予定', '発表文']
-          ]
-        }),
-        cache: 'no-store'
-      });
-      let headerData = {};
-      try { headerData = await headerResponse.json(); } catch (error) {}
-      if (!headerResponse.ok) {
-        renderScheduleSheetNotice(record, '予定表は作成されましたが、見出しの設定に失敗しました。シートを開いて確認してください。');
-        throw new Error(headerData && headerData.error && headerData.error.message || '予定表の列見出しを書き込めませんでした。');
-      }
-
-      const historyHeaderUrl = SHEETS_API + encodeURIComponent(record.spreadsheetId) +
-        '/values/' + encodeURIComponent("'記録'!A1:F1") + '?valueInputOption=USER_ENTERED';
-      const historyHeaderResponse = await fetch(historyHeaderUrl, {
-        method: 'PUT',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ values: [['記録日時（端末時刻）', '記録ID', '合計時間（ms）', '合計時間', 'ラップ数', 'ラップ経過時間（ms・JSON）']] }),
-        cache: 'no-store'
-      });
-      if (historyHeaderResponse.ok) {
-        await ensureScheduleSpreadsheetLayout(record, token);
-        renderScheduleSheetNotice(record, '予定表に日付・授業時間数・特別欄のプルダウンを設定しました。');
-      } else {
-        renderScheduleSheetNotice(record, '予定表は作成されましたが、記録シートの見出し設定に失敗しました。');
-      }
+      await ensureScheduleSpreadsheetLayout(record, token);
+      renderScheduleSheetNotice(record, '準備完了です。予定シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付は不要です。');
       return record;
     })().catch(error => {
-      renderScheduleSheetNotice(null, '予定表の自動作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
-      if (errorNode) setError(error.message || '予定表の作成に失敗しました。');
-      console.error('Automatic schedule spreadsheet creation failed', error);
+      renderScheduleSheetNotice(null, '今日の予定シートの作成に失敗しました。Googleのアクセス許可を確認して再ログインしてください。');
+      if (errorNode) setError(error.message || '予定シートの作成に失敗しました。');
+      console.error('Automatic today schedule spreadsheet creation failed', error);
       return null;
     }).finally(() => { scheduleCreationPromise = null; });
     return scheduleCreationPromise;
@@ -611,7 +454,7 @@
       link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
       node.appendChild(link);
       const detail = document.createElement('p');
-      detail.textContent = 'このスプレッドシートを予定表とストップウォッチ記録の保存先として自動使用します。URL入力は不要です。';
+      detail.textContent = '「予定」シートの2行目だけを今日の予定として使用します。日付入力は不要です。';
       detail.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
       node.appendChild(detail);
     }
@@ -639,7 +482,7 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Googleログイン後に自動作成する同じスプレッドシートを、予定表とストップウォッチ記録で共用します。URL入力は不要です.';
+    note.textContent = 'Googleログイン後に今日の予定シートを自動作成します。日付の入力は不要で、2行目の内容をすべて今日の予定として発表します。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
@@ -648,11 +491,9 @@
     errorNode.hidden = true;
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px';
-    connectButton = makeButton('予定表スプレッドシートに接続', true);
-    syncButton = makeButton('ストップウォッチ履歴を同期');
-    syncButton.disabled = true;
-    testButton = makeButton('忘れ物防止テスト', true);
-    actions.append(connectButton, syncButton, testButton);
+    connectButton = makeButton('今日の予定シートを確認', true);
+    testButton = makeButton('持ち物テスト（今日の予定を発表）', true);
+    actions.append(connectButton, testButton);
     testOutput = document.createElement('div');
     testOutput.id = 'pcPackingTestOutput';
     testOutput.style.cssText = 'margin-top:12px;min-width:0';
@@ -665,18 +506,16 @@
     const foot = document.createElement('p');
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
-    foot.textContent = '自動作成した同じスプレッドシートの「記録」シートに、未登録のストップウォッチ記録を追加します。既存の行は上書き・削除しません。';
+    foot.textContent = '「予定」シートは見出し1行＋入力1行だけです。A列=授業時間数、B列=区分、C列=特別の記入、D列=今日の予定・持ち物、E列=発表文。日付は不要です。';
     group.append(title, note, statusNode, errorNode, actions, testOutput, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
     connectButton.addEventListener('click', connect);
-    syncButton.addEventListener('click', syncHistory);
     testButton.addEventListener('click', runPackingTest);
-    if (activeScheduleRecord()) setStatus('自動作成した予定表を連携先として使用します。');
+    if (activeScheduleRecord()) setStatus('自動作成した今日の予定シートを使用します。');
     window.PC_SHEETS = {
       connect,
-      syncHistory,
       get connected() { return Boolean(accessToken && Date.now() < tokenExpiresAt); }
     };
   }
