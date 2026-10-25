@@ -1,7 +1,7 @@
 {
   "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 2,
+  "completed_operations": 1,
   "features": {
     "timer_stop": true,
     "timer_reset": true,
@@ -10,6 +10,6 @@
     "history_best_code": true
   },
   "browser_errors": [],
-  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:53:12",
-  "timestamp": "2026-10-25T12:29:00.752Z"
+  "failure": "locator.waitFor: Timeout 2000ms exceeded.\nCall log:\n  - waiting for locator('.clk-timer-circle') to be visible\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:47:18",
+  "timestamp": "2026-10-25T12:45:36.504Z"
 }
