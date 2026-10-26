@@ -41,8 +41,8 @@
     });
     host.append(button, message);
   }
-  const observer = new MutationObserver(install);
+  // schedule-announcement.js installs its status panel before DOMContentLoaded.
+  // Install once instead of observing every change in the entire page.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
-  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
