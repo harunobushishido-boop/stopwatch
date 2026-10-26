@@ -59,10 +59,11 @@ let report;
 try{
   await page.goto(ORIGIN+'/index.html?history-scroll-test=1',{waitUntil:'domcontentloaded'});
   await page.locator('.clk-sw-history-toggle').waitFor({state:'attached',timeout:10000});
-  await page.waitForFunction(()=>document.querySelectorAll('#clkSwHistoryList .clk-lap--history').length>=50,{timeout:10000});
   await page.evaluate(()=>document.querySelector('.clk-panel__close')?.click());
+  await page.waitForFunction(()=>{const backdrop=document.querySelector('.clk-backdrop');return !backdrop||getComputedStyle(backdrop).visibility==='hidden'},{timeout:3000});
   await page.locator('.clk-sw-history-toggle').evaluate(el=>el.click());
   await page.waitForFunction(()=>{const panel=document.querySelector('#clkSwHistoryPanel');return panel&&!panel.hidden},{timeout:3000});
+  await page.waitForFunction(()=>document.querySelectorAll('#clkSwHistoryList .clk-lap--history').length>=50,{timeout:10000});
   const before=await page.evaluate(()=>{
     const list=document.querySelector('#clkSwHistoryList'),style=getComputedStyle(list),panel=document.querySelector('#clkSwHistoryPanel');
     return {rows:list.querySelectorAll('.clk-lap--history').length,overflowY:style.overflowY,clientHeight:list.clientHeight,scrollHeight:list.scrollHeight,scrollTop:list.scrollTop,panelOverflowY:getComputedStyle(panel).overflowY,panelHeight:panel.clientHeight};

@@ -325,9 +325,9 @@
     const oldData = await requestJson(base + '/values/' + encodeURIComponent("'予定'!A1:Z200"));
     const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
     const oldHeader = (oldValues[0] || []).map(value => String(value == null ? '' : value).trim());
-    const newHeader = ['授業時間数', '区分（通常/特別）', '特別の記入', '明日の持ち物', '追加のお知らせ'];
+    const newHeader = ['授業時間数', '区分（通常/特別）', '特別の記入', '明日の持ち物', '追加のお知らせ', '1〜4時間授業の発表時刻（HH:mm）'];
     const today = currentTokyoDateKey();
-    let todayRow = ['', '', '', '', ''];
+    let todayRow = ['', '', '', '', '', ''];
 
     const findHeader = (tests, fallback) => {
       const index = oldHeader.findIndex(value => tests.some(test => test(value)));
@@ -340,6 +340,7 @@
     const specialCol = findHeader([value => value === '特別の記入'], dateColumn >= 0 ? 3 : 2);
     const planCol = findHeader([value => value === '明日の持ち物' || value === '今日の予定・持ち物' || value === '予定' || value === '持ち物'], dateColumn >= 0 ? 4 : 3);
     const textCol = findHeader([value => value === '追加のお知らせ' || value === '発表文'], dateColumn >= 0 ? 5 : 4);
+    const timeCol = findHeader([value => value === '1〜4時間授業の発表時刻（HH:mm）' || value === '発表時刻' || value === '自動発表時刻'], dateColumn >= 0 ? 6 : 5);
 
     if (dateColumn >= 0) {
       // 以前の日付別シートは「今日」に一致する行だけを引き継ぐ。
@@ -347,14 +348,14 @@
       if (todayOldRow) {
         todayRow = [
           rowValue(todayOldRow, classCol), rowValue(todayOldRow, kindCol), rowValue(todayOldRow, specialCol),
-          rowValue(todayOldRow, planCol), rowValue(todayOldRow, textCol)
+          rowValue(todayOldRow, planCol), rowValue(todayOldRow, textCol), rowValue(todayOldRow, timeCol)
         ];
       }
     } else if (oldHeader.length) {
       const existingRow = oldValues[1] || [];
       todayRow = [
         rowValue(existingRow, classCol), rowValue(existingRow, kindCol), rowValue(existingRow, specialCol),
-        rowValue(existingRow, planCol), rowValue(existingRow, textCol)
+        rowValue(existingRow, planCol), rowValue(existingRow, textCol), rowValue(existingRow, timeCol)
       ];
     }
 
@@ -367,7 +368,8 @@
       { columnIndex: 1, columnName: newHeader[1], columnType: 'DROPDOWN', dataValidationRule: listRule(['通常', '特別']) },
       { columnIndex: 2, columnName: newHeader[2], columnType: 'TEXT' },
       { columnIndex: 3, columnName: newHeader[3], columnType: 'TEXT' },
-      { columnIndex: 4, columnName: newHeader[4], columnType: 'TEXT' }
+      { columnIndex: 4, columnName: newHeader[4], columnType: 'TEXT' },
+      { columnIndex: 5, columnName: newHeader[5], columnType: 'TEXT' }
     ];
 
     // まずセルを「見出し1行＋今日の入力1行」に揃える。
@@ -375,7 +377,7 @@
     const requests = [
       {
         updateCells: {
-          range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
+          range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 6 },
           rows: [{ values: newHeader.map(cell) }, { values: todayRow.map(cell) }],
           fields: 'userEnteredValue'
         }
@@ -418,16 +420,16 @@
       const range = table.range || {};
       return Number(range.startRowIndex || 0) < 2 &&
         Number(range.endRowIndex || 0) > 0 &&
-        Number(range.startColumnIndex || 0) < 5 &&
+        Number(range.startColumnIndex || 0) < 6 &&
         Number(range.endColumnIndex || 0) > 0;
     });
     const tableRequest = !overlappingTable
       ? { addTable: { table: {
           name: 'TodaySchedule',
-          range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 5 },
+          range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
           columnProperties
         } } }
-      : { updateTable: { table: { tableId: overlappingTable.tableId, columnProperties }, fields: 'columnProperties' } };
+      : { updateTable: { table: { tableId: overlappingTable.tableId, range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 }, columnProperties }, fields: 'range,columnProperties' } };
     try {
       await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests: [tableRequest] } });
       return true;
@@ -474,6 +476,22 @@
     return data;
   }
 
+
+  async function findExistingScheduleSpreadsheet(token) {
+    const escapedTitle = SCHEDULE_SPREADSHEET_TITLE.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const query = "name = '" + escapedTitle + "' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false";
+    const url = 'https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent(query) +
+      '&pageSize=100&orderBy=modifiedTime%20desc&fields=files(id,name,mimeType,webViewLink,modifiedTime)';
+    const data = await scheduleApiJson(url, token);
+    const files = Array.isArray(data.files) ? data.files : [];
+    if (!files.length) return null;
+    const file = files[0];
+    return file.id ? {
+      spreadsheetId: file.id,
+      url: file.webViewLink || ('https://docs.google.com/spreadsheets/d/' + file.id + '/edit')
+    } : null;
+  }
+
   async function autoCreateScheduleSpreadsheet() {
     if (scheduleCreationPromise) return scheduleCreationPromise;
     scheduleCreationPromise = (async () => {
@@ -507,6 +525,17 @@
           console.warn('Cached schedule spreadsheet was not found; creating a replacement.', error);
           record = null;
         }
+      }
+
+      const existing = await findExistingScheduleSpreadsheet(token);
+      if (existing) {
+        record = existing;
+        saveScheduleSheetRecord(email, record);
+        const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+        record.chipDropdownApplied = chipDropdownApplied;
+        saveScheduleSheetRecord(email, record);
+        renderScheduleSheetNotice(record, '既存の明日の持ち物シートを見つけて再利用しました。');
+        return record;
       }
 
       const created = await scheduleApiJson(SHEETS_API, token, {
@@ -563,7 +592,7 @@
       link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
       node.appendChild(link);
       const detail = document.createElement('p');
-      detail.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物を指定します。日付入力は不要です。';
+      detail.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物を指定します。1〜4時間授業はF2に発表時刻（例：13:20）を入力します。5時間は14:25、6時間は15:15です。';
       detail.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
       node.appendChild(detail);
     }
@@ -619,14 +648,14 @@
     const foot = document.createElement('p');
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
-    foot.textContent = '「予定」シートは見出し1行＋入力1行です。A列=授業時間数（1〜6のプルダウン）、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ。';
+    foot.textContent = '「予定」シートは見出し1行＋入力1行です。A列=授業時間数、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ、F列=1〜4時間授業の発表時刻（HH:mm）。5時間は14:25、6時間は15:15です。';
     group.append(title, note, statusNode, errorNode, actions, testOutput, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
     connectButton.addEventListener('click', connect);
     testButton.addEventListener('click', runPackingTest);
-    if (activeScheduleRecord()) setStatus('明日の持ち物シートを使用します。存在しない場合は自動で再作成します。');
+    if (activeScheduleRecord()) setStatus('保存済みの明日の持ち物シートを再利用します。見つからない場合だけ作成します。');
     window.PC_SHEETS = {
       connect,
       ensureScheduleSpreadsheet: autoCreateScheduleSpreadsheet,

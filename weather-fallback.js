@@ -294,6 +294,124 @@
     });
   }
 
+
+  // Current observations from JMA AMeDAS; forecasts remain from JMA's prefectural JSON.
+  const AMEDAS_TABLE_URL = 'https://www.jma.go.jp/bosai/amedas/const/amedastable.json';
+  const AMEDAS_LATEST_TIME_URL = 'https://www.jma.go.jp/bosai/amedas/data/latest_time.txt';
+  const AMEDAS_MAP_BASE = 'https://www.jma.go.jp/bosai/amedas/data/map/';
+  const AMEDAS_CACHE_PREFIX = 'pc-jma-amedas-current-v1:';
+  let amedasTablePromise = null;
+
+  async function requestText(url, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(function () { controller.abort(); }, timeoutMs || 7000);
+    try {
+      const response = await fetch(url, { method: 'GET', cache: 'no-store', credentials: 'omit', signal: controller.signal });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return await response.text();
+    } finally { clearTimeout(timeout); }
+  }
+
+  function amedasCoordinate(value) {
+    if (!Array.isArray(value) || value.length < 2) return NaN;
+    const degrees = Number(value[0]), minutes = Number(value[1]);
+    return Number.isFinite(degrees) && Number.isFinite(minutes) ? degrees + minutes / 60 : NaN;
+  }
+
+  function distanceKm(lat1, lon1, lat2, lon2) {
+    const rad = value => value * Math.PI / 180;
+    const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+  }
+
+  function amedasValue(value) {
+    const raw = Array.isArray(value) ? value[0] : value;
+    if (raw === '' || raw === null || raw === undefined || !Number.isFinite(Number(raw))) return '';
+    return Number(raw);
+  }
+
+  async function getAmedasObservation(lat, lon) {
+    const cacheKey = AMEDAS_CACHE_PREFIX + coordsKey(lat, lon);
+    let stale = null;
+    try {
+      stale = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+      if (stale && stale.observation && Date.now() - Number(stale.savedAt) < 5 * 60 * 1000) return stale.observation;
+    } catch (error) { stale = null; }
+
+    try {
+      if (!amedasTablePromise) {
+        amedasTablePromise = requestJson(AMEDAS_TABLE_URL, 8000).catch(function (error) {
+          amedasTablePromise = null;
+          throw error;
+        });
+      }
+      const [table, latestText] = await Promise.all([
+        amedasTablePromise,
+        requestText(AMEDAS_LATEST_TIME_URL, 7000)
+      ]);
+      const latestRaw = String(latestText || '').trim();
+      const stampMatch = latestRaw.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      if (!stampMatch) throw new Error('アメダスの最新時刻を読み取れませんでした。');
+      const stamp = stampMatch.slice(1).join('');
+      const map = await requestJson(AMEDAS_MAP_BASE + stamp + '00.json', 8000);
+
+      const stations = Object.entries(table || {}).map(([code, station]) => ({
+        code, station,
+        lat: amedasCoordinate(station && station.lat),
+        lon: amedasCoordinate(station && station.lon)
+      })).filter(item => Number.isFinite(item.lat) && Number.isFinite(item.lon) && map && map[item.code]);
+      stations.sort((a, b) => distanceKm(lat, lon, a.lat, a.lon) - distanceKm(lat, lon, b.lat, b.lon));
+
+      let found = null;
+      for (const item of stations) {
+        const data = map[item.code] || {};
+        const observation = {
+          stationCode: item.code,
+          stationName: String(item.station && item.station.kjName || item.station && item.station.knName || 'アメダス観測所'),
+          distanceKm: distanceKm(lat, lon, item.lat, item.lon),
+          time: latestRaw,
+          temp: amedasValue(data.temp),
+          humidity: amedasValue(data.humidity),
+          wind: amedasValue(data.wind),
+          precipitation1h: amedasValue(data.precipitation1h)
+        };
+        if (observation.temp !== '' || observation.humidity !== '' || observation.wind !== '') {
+          found = observation;
+          break;
+        }
+      }
+      if (!found) throw new Error('地点に近いアメダスの最新観測データが見つかりませんでした。');
+      try { localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), observation: found })); } catch (error) {}
+      return found;
+    } catch (error) {
+      if (stale && stale.observation && Date.now() - Number(stale.savedAt) < 60 * 60 * 1000) {
+        console.warn('最新のアメダス観測を取得できないため、保存済み観測を表示します。', error);
+        return stale.observation;
+      }
+      throw error;
+    }
+  }
+
+  async function addAmedasObservation(forecast, lat, lon) {
+    try {
+      const observation = await getAmedasObservation(lat, lon);
+      const current = Object.assign({}, forecast.__current || {});
+      if (observation.temp !== '') current.temp = observation.temp;
+      if (observation.humidity !== '') current.humidity = observation.humidity;
+      if (observation.wind !== '') current.wind = observation.wind;
+      current.time = observation.time || current.time || '';
+      forecast.__current = current;
+      forecast.__observation = observation;
+      forecast.__currentObserved = true;
+    } catch (error) {
+      forecast.__observation = null;
+      forecast.__currentObserved = false;
+      console.warn('アメダスの現在観測を取得できませんでした。気象庁の予報を続けて表示します。', error);
+    }
+    return forecast;
+  }
+
   function isValidForecast(forecast) {
     if (!Array.isArray(forecast) || !forecast[0] || !forecast[1]) return false;
     const hourly = forecast[0].timeSeries;
@@ -315,12 +433,12 @@
     const office = await resolveOffice(latitude, longitude, name);
     const cached = readCachedForecast(office.officeCode);
     if (cached && Date.now() - Number(cached.fetchedAt) < CACHE_FRESH_MS) {
-      return normalizeJmaForecast(cached.data, office, cached.fetchedAt, false, latitude, longitude, name);
+      return await addAmedasObservation(normalizeJmaForecast(cached.data, office, cached.fetchedAt, false, latitude, longitude, name), latitude, longitude);
     }
 
     if (forecastInFlight.has(office.officeCode)) {
       const shared = await forecastInFlight.get(office.officeCode);
-      return normalizeJmaForecast(shared.data, office, shared.fetchedAt, Boolean(shared.stale), latitude, longitude, name);
+      return await addAmedasObservation(normalizeJmaForecast(shared.data, office, shared.fetchedAt, Boolean(shared.stale), latitude, longitude, name), latitude, longitude);
     }
 
     const task = (async function () {
@@ -343,176 +461,15 @@
 
     forecastInFlight.set(office.officeCode, task);
     const result = await task;
-    return normalizeJmaForecast(result.data, office, result.fetchedAt, Boolean(result.stale), latitude, longitude, name);
+    return await addAmedasObservation(normalizeJmaForecast(result.data, office, result.fetchedAt, Boolean(result.stale), latitude, longitude, name), latitude, longitude);
   }
 
 
-  const YAHOO_YOLP_KEY_STORAGE = 'pc-yahoo-yolp-appid-v1';
-
-  function readYahooYolpKey() {
-    try { return String(localStorage.getItem(YAHOO_YOLP_KEY_STORAGE) || '').trim(); }
-    catch (error) { return ''; }
-  }
-
-  function getYahooRainfallJsonp(lat, lon, appId) {
-    return new Promise(function (resolve, reject) {
-      const callbackName = '__pcYahooRain_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
-      const script = document.createElement('script');
-      let settled = false;
-      const timer = setTimeout(function () {
-        finish(new Error('Yahoo! JAPAN気象情報APIがタイムアウトしました。Client IDと利用条件を確認してください。'));
-      }, 9000);
-      function finish(error, value) {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        script.onerror = null;
-        if (script.parentNode) script.parentNode.removeChild(script);
-        try { delete window[callbackName]; } catch (ignored) { window[callbackName] = undefined; }
-        if (error) reject(error); else resolve(value);
-      }
-      window[callbackName] = function (payload) {
-        const resultInfo = payload && payload.YDF && payload.YDF.ResultInfo;
-        if (!payload || !payload.YDF || (resultInfo && Number(resultInfo.Status) !== 200)) {
-          finish(new Error('Yahoo! JAPAN気象情報APIから正常な応答がありませんでした。'));
-          return;
-        }
-        finish(null, payload);
-      };
-      const params = new URLSearchParams({
-        appid: appId,
-        coordinates: Number(lon) + ',' + Number(lat),
-        output: 'json',
-        callback: callbackName,
-        interval: '10',
-        past: '1'
-      });
-      script.async = true;
-      script.src = 'https://map.yahooapis.jp/weather/V1/place?' + params.toString();
-      script.onerror = function () {
-        finish(new Error('Yahoo! JAPAN気象情報APIに接続できませんでした。'));
-      };
-      document.head.appendChild(script);
-    });
-  }
-
-  async function getYahooRainfall(lat, lon, appId) {
-    const payload = await getYahooRainfallJsonp(lat, lon, appId);
-    const rawFeature = payload && payload.YDF && payload.YDF.Feature;
-    const features = Array.isArray(rawFeature) ? rawFeature : (rawFeature ? [rawFeature] : []);
-    const rawWeather = features[0] && features[0].Property &&
-      features[0].Property.WeatherList && features[0].Property.WeatherList.Weather;
-    const weather = Array.isArray(rawWeather) ? rawWeather : (rawWeather ? [rawWeather] : []);
-    const sorted = weather.map(function (item) {
-      const stamp = String(item && item.Date || '');
-      const rainfall = item && item.Rainfall !== undefined && Number.isFinite(Number(item.Rainfall))
-        ? Number(item.Rainfall) : '';
-      return { type: String(item && item.Type || ''), stamp: stamp, rainfall: rainfall };
-    }).filter(function (item) { return item.rainfall !== '' && /^\d{12}$/.test(item.stamp); })
-      .sort(function (a, b) { return a.stamp.localeCompare(b.stamp); });
-    if (!sorted.length) throw new Error('Yahoo! JAPAN気象情報APIに雨の強さデータが含まれていません。');
-    const observed = sorted.filter(function (item) { return item.type === 'observation'; });
-    const predicted = sorted.filter(function (item) { return item.type === 'forecast'; });
-    const current = observed.length ? observed[observed.length - 1] : sorted[0];
-    const nextHour = predicted.length ? predicted[predicted.length - 1] : null;
-    return {
-      current: current.rainfall,
-      nextHour: nextHour ? nextHour.rainfall : null,
-      updatedAt: current.stamp,
-      forecastAt: nextHour ? nextHour.stamp : '',
-      points: sorted.filter(function (item) { return item.type === 'forecast'; }).map(function (item) {
-        return { time: item.stamp, rainfall: item.rainfall };
-      })
-    };
-  }
-
-  async function getPreferredForecast(lat, lon, name) {
-    // Yahoo! JAPAN's official weather API provides rainfall intensity only.
-    // Use the JMA feed for sky conditions, temperatures, and the weekly forecast.
-    const forecast = await getJmaForecast(lat, lon, name);
-    const yahooKey = readYahooYolpKey();
-    if (!yahooKey) {
-      forecast.__source = '気象庁（天気・週間予報）';
-      forecast.__yahooRainfall = null;
-      forecast.__yahooStatus = 'Yahoo! Client ID未設定';
-      return forecast;
-    }
-    try {
-      forecast.__yahooRainfall = await getYahooRainfall(lat, lon, yahooKey);
-      forecast.__source = '気象庁（天気・週間予報）＋Yahoo! JAPAN（雨の強さ・60分先）';
-      forecast.__yahooStatus = 'Yahoo! JAPAN APIから取得';
-    } catch (yahooError) {
-      forecast.__yahooRainfall = null;
-      forecast.__yahooStatus = String(yahooError && yahooError.message || yahooError);
-      forecast.__source = '気象庁（天気・週間予報）';
-    }
-    return forecast;
-  }
-
-  function installYahooWeatherSettings() {
-    const host = document.querySelector('.clk-weather__privacy');
-    if (!host || document.getElementById('pcYahooWeatherSettings')) return;
-    const panel = document.createElement('section');
-    panel.id = 'pcYahooWeatherSettings';
-    panel.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid #00000018;color:inherit';
-    panel.innerHTML =
-      '<strong style="display:block;font-size:12px;margin-bottom:6px">Yahoo! JAPAN 気象情報API</strong>' +
-      '<p style="font-size:11.5px;line-height:1.6;margin:0 0 8px">Yahoo!の公式APIで、富沢小学校周辺の現在の雨の強さと約60分先までの雨の予測を表示します。気温・天気の種類・週間予報はこのAPIでは提供されないため、そこは気象庁の予報を使います。Client IDはこのブラウザー内だけに保存し、GitHubのソースコードには書き込みません。</p>' +
-      '<label for="pcYahooWeatherClientId" style="display:block;font-size:11.5px;margin-bottom:5px">Yahoo! YOLP Client ID</label>' +
-      '<input id="pcYahooWeatherClientId" type="password" autocomplete="off" spellcheck="false" placeholder="Yahoo!デベロッパーネットワークのClient ID" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
-      '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
-      '<button type="button" id="pcYahooWeatherSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">Client IDを保存して再取得</button>' +
-      '<button type="button" id="pcYahooWeatherDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">Yahoo! APIを無効化</button>' +
-      '</div>' +
-      '<p id="pcYahooWeatherStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 0"></p>' +
-      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0"><a href="https://e.developer.yahoo.co.jp/register" target="_blank" rel="noopener noreferrer">Yahoo!アプリケーション登録・Client ID取得</a> · <a href="https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html" target="_blank" rel="noopener noreferrer">公式API仕様</a></p>' +
-      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0">Yahoo! YOLPの気象情報APIは1アプリケーションあたり1日5万リクエストまで。公開・無料サービス向けの利用条件と、Yahoo!のクレジット表示ルールを確認してください。</p>' +
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:10px">' +
-      '<a href="https://weather.yahoo.co.jp/weather/" target="_blank" rel="noopener noreferrer">Yahoo!天気を開く</a>' +
-      '<a href="https://weathernews.jp/" target="_blank" rel="noopener noreferrer">ウェザーニュース</a>' +
-      '</div>';
-    host.appendChild(panel);
-    const input = panel.querySelector('#pcYahooWeatherClientId');
-    const status = panel.querySelector('#pcYahooWeatherStatus');
-    const save = panel.querySelector('#pcYahooWeatherSave');
-    const disable = panel.querySelector('#pcYahooWeatherDisable');
-    function update(message) { status.textContent = message; status.style.color = '#555'; }
-    update(readYahooYolpKey()
-      ? 'Client IDはこのブラウザーに保存済みです（値は表示していません）。'
-      : '未設定です。Yahoo!デベロッパーネットワークで取得したClient IDを入力してください。');
-    save.addEventListener('click', function () {
-      const value = String(input.value || '').trim();
-      if (!value) { update('Yahoo! YOLP Client IDを入力してください。'); return; }
-      try {
-        localStorage.setItem(YAHOO_YOLP_KEY_STORAGE, value);
-        input.value = '';
-        update('Client IDをこのブラウザーに保存しました。雨の強さを再取得します。');
-        const refresh = document.querySelector('.clk-weather__refresh-btn');
-        if (refresh) refresh.click();
-      } catch (error) {
-        update('ブラウザーに保存できませんでした。ブラウザーの保存設定を確認してください。');
-      }
-    });
-    disable.addEventListener('click', function () {
-      try { localStorage.removeItem(YAHOO_YOLP_KEY_STORAGE); } catch (error) {}
-      input.value = '';
-      update('Yahoo! APIを無効化しました。');
-      const refresh = document.querySelector('.clk-weather__refresh-btn');
-      if (refresh) refresh.click();
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installYahooWeatherSettings, { once: true });
-  } else {
-    installYahooWeatherSettings();
-  }
-
+  // Weather uses only Japan Meteorological Agency feeds.
   window.__weatherFallback = {
-    getJmaForecast: getPreferredForecast,
-    getForecast: getPreferredForecast,
-    isValidForecast: isValidForecast,
-    hasYahooRainfallKey: function () { return Boolean(readYahooYolpKey()); }
+    getJmaForecast: getJmaForecast,
+    getForecast: getJmaForecast,
+    isValidForecast: isValidForecast
   };
 
   // Keep the stopwatch history list independently scrollable.

@@ -106,6 +106,19 @@
     return sentences.join(' ');
   }
   window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
+
+  function targetTimeForClasses(classes, row) {
+    if (classes === 5) return '14:25';
+    if (classes === 6) return '15:15';
+    if (!Number.isInteger(classes) || classes < 1 || classes > 4) return '';
+    const raw = String(row && row[5] != null ? row[5] : '').trim();
+    const match = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!match) return '';
+    return String(Number(match[1])).padStart(2, '0') + ':' + match[2];
+  }
+  window.PC_SCHEDULE_TARGET_TIME = targetTimeForClasses;
+
+
   // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
   // speaker=2 は VOICEVOX:四国めたん（ノーマル）。
   const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
@@ -417,7 +430,7 @@
       const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
-        setStatus('「予定」シートのA2で授業時間数、D2で明日の持ち物を入力してください。');
+        setStatus('「予定」シートのA2で授業時間数、D2で明日の持ち物を入力してください。1〜4時間授業はF2に発表時刻を入力します。');
         return;
       }
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
@@ -426,9 +439,11 @@
         return;
       }
 
-      const targetMinutesFromMidnight = (14 * 60 + 25) + (classes - 5) * 60;
-      const target = String(Math.floor(targetMinutesFromMidnight / 60)).padStart(2, '0') + ':' +
-        String(targetMinutesFromMidnight % 60).padStart(2, '0');
+      const target = targetTimeForClasses(classes, row);
+      if (!target) {
+        setStatus(classes + '時間授業：F2に発表時刻（例：13:20）を入力してください。');
+        return;
+      }
       const [hour, minute] = target.split(':').map(Number);
       const now = new Date();
       const nowMinutes = now.getHours() * 60 + now.getMinutes();

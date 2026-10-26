@@ -41,7 +41,18 @@ await page.route('https://zipcloud.ibsnet.co.jp/api/search**',async route=>{
 let completed=0,failure=null,started=Date.now();
 try{
   await page.goto(ORIGIN+'/index.html?weather-test=v2', {waitUntil:'domcontentloaded'});
+  const scheduled = await page.evaluate(() => ({
+    one: window.PC_SCHEDULE_TARGET_TIME(1, ['', '', '', '', '', '10:25']),
+    four: window.PC_SCHEDULE_TARGET_TIME(4, ['', '', '', '', '', '13:10']),
+    five: window.PC_SCHEDULE_TARGET_TIME(5, ['', '', '', '', '', '09:00']),
+    six: window.PC_SCHEDULE_TARGET_TIME(6, ['', '', '', '', '', '09:00'])
+  }));
+  assert.deepEqual(scheduled, {one:'10:25',four:'13:10',five:'14:25',six:'15:15'});
+  assert.equal(await page.locator('#pcYahooRainPanel').count(), 0, 'Yahoo weather panel should be removed');
+  assert.equal(await page.locator('#pcYahooWeatherSettings').count(), 0, 'Yahoo weather settings should be removed');
   await page.locator('button.clk-controls__btn[aria-label="天気"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
+  await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[0]?.textContent==='61%',{timeout:5000});
+  assert.equal(await page.locator('.clk-weather__stat-value').nth(1).innerText(),'4.0 m/s');
   await page.waitForTimeout(10);
 
   const edit=page.locator('.clk-weather__edit-btn');
