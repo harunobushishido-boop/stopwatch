@@ -1,7 +1,7 @@
 {
   "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 2,
+  "completed_operations": 0,
   "features": {
     "timer_stop": true,
     "timer_reset": true,
@@ -10,6 +10,6 @@
     "history_best_code": true
   },
   "browser_errors": [],
-  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:53:12",
-  "timestamp": "2026-10-26T07:08:07.906Z"
+  "failure": "page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:4173/index.html?timer-test=1000\", waiting until \"domcontentloaded\"\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:35:14",
+  "timestamp": "2026-10-26T07:13:56.796Z"
 }
