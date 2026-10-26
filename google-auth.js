@@ -214,6 +214,26 @@
     return window.__pcGoogleGISPromise;
   }
 
+  let tokenRequestActive = false;
+  let silentAccessAttempt = false;
+  function requestGoogleAccess(silent = false) {
+    if (!tokenClient || tokenRequestActive) return false;
+    silentAccessAttempt = !!silent;
+    tokenRequestActive = true;
+    try {
+      tokenClient.requestAccessToken(silent ? { prompt: '' } : { prompt: 'consent' });
+      return true;
+    } catch (error) {
+      tokenRequestActive = false;
+      silentAccessAttempt = false;
+      if (!silent) {
+        setError(error.message || 'Google認証を開始できませんでした。');
+        setStatus('Google認証を開始できません', true);
+      }
+      return false;
+    }
+  }
+
   async function initializeGoogleSignIn() {
     if (!configured || !container) return;
     try {
@@ -221,66 +241,97 @@
       if (!container.isConnected) return;
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
-      button.style.cssText = 'padding:10px 14px;border:1px solid #4285f4;border-radius:9px;background:#4285f4;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer';
+      button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
+      button.style.cssText = 'padding:10px 13px;border:1px solid #4285f4;border-radius:9px;background:#4285f4;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer';
+      tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: AUTH_SCOPES,
+        callback: async (response) => {
+          const wasSilent = silentAccessAttempt;
+          silentAccessAttempt = false;
+          tokenRequestActive = false;
+          try {
+            if (!response || !response.access_token) {
+              if (wasSilent) {
+                setStatus(currentUser
+                  ? '保存済みのGoogleアカウントを確認しました。シート接続に失敗した場合は「Googleへのアクセスを再接続」を押してください。'
+                  : 'Googleスプレッドシートを使うには、Googleアカウントで接続してください。');
+                return;
+              }
+              throw new Error(response && (response.error_description || response.error) || 'Googleからアクセス許可を取得できませんでした。');
+            }
+            accessToken = response.access_token;
+            accessTokenExpiresAt = Date.now() + Math.max(60, Number(response.expires_in || 3600) - 60) * 1000;
+            const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: 'Bearer ' + accessToken },
+              cache: 'no-store'
+            });
+            if (!profileResponse.ok) throw new Error('Googleアカウント情報を取得できませんでした（HTTP ' + profileResponse.status + '）。');
+            const profile = await profileResponse.json();
+            if (!profile || !profile.sub || !profile.email) throw new Error('Googleアカウント情報が不完全です。');
+            publishState({
+              sub: String(profile.sub),
+              name: String(profile.name || ''),
+              email: String(profile.email || ''),
+              picture: String(profile.picture || ''),
+              emailVerified: profile.email_verified === true,
+              expiresAt: Math.floor(accessTokenExpiresAt / 1000),
+              verifiedByServer: false
+            });
+            setError('');
+            setStatus('Google接続済み。スプレッドシートへのアクセス許可を確認しました。');
+          } catch (error) {
+            accessToken = '';
+            accessTokenExpiresAt = 0;
+            if (!wasSilent) {
+              setError(error.message || 'Google接続に失敗しました。');
+              setStatus('Google接続に失敗しました', true);
+            } else {
+              setStatus(currentUser
+                ? 'Googleアカウントは保存されています。接続を復旧できない場合は、Googleへのアクセスを再接続してください。'
+                : 'Googleへの接続が必要です。');
+            }
+          } finally {
+            button.disabled = false;
+            button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
+          }
+        },
+        error_callback: (error) => {
+          const wasSilent = silentAccessAttempt;
+          silentAccessAttempt = false;
+          tokenRequestActive = false;
+          button.disabled = false;
+          button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
+          if (wasSilent) {
+            setStatus(currentUser
+              ? '保存済みのGoogleアカウントがあります。自動接続できない場合は「Googleへのアクセスを再接続」を押してください。'
+              : 'Googleスプレッドシートを使うときは、Googleアカウントで接続してください。');
+            return;
+          }
+          setError(error && error.message || 'Googleの認証画面を開けませんでした。');
+          setStatus('Google認証に失敗しました', true);
+        }
+      });
+      window.__pcGoogleRequestAccess = requestGoogleAccess;
       button.addEventListener('click', () => {
         setError('');
+        if (tokenRequestActive) return;
         button.disabled = true;
         button.textContent = 'Googleに接続中…';
-        try {
-          tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: clientId,
-            scope: AUTH_SCOPES,
-            callback: async (response) => {
-              try {
-                if (!response || !response.access_token) {
-                  throw new Error(response && (response.error_description || response.error) || 'Googleからアクセス許可を取得できませんでした。');
-                }
-                accessToken = response.access_token;
-                accessTokenExpiresAt = Date.now() + Math.max(60, Number(response.expires_in || 3600) - 60) * 1000;
-                const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: 'Bearer ' + accessToken },
-                  cache: 'no-store'
-                });
-                if (!profileResponse.ok) throw new Error('Googleアカウント情報を取得できませんでした（HTTP ' + profileResponse.status + '）。');
-                const profile = await profileResponse.json();
-                if (!profile || !profile.sub) throw new Error('Googleアカウント情報が不完全です。');
-                publishState({
-                  sub: String(profile.sub),
-                  name: String(profile.name || ''),
-                  email: String(profile.email || ''),
-                  picture: String(profile.picture || ''),
-                  emailVerified: profile.email_verified === true,
-                  expiresAt: Math.floor(accessTokenExpiresAt / 1000),
-                  verifiedByServer: false
-                });
-                setError('');
-                setStatus('ログイン済み。スプレッドシートへのアクセスも許可されました。');
-              } catch (error) {
-                accessToken = '';
-                accessTokenExpiresAt = 0;
-                setError(error.message || 'Googleログインに失敗しました。');
-                setStatus('ログインに失敗しました', true);
-              } finally {
-                button.disabled = false;
-                button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
-              }
-            },
-            error_callback: (error) => {
-              button.disabled = false;
-              button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
-              setError(error && error.message || 'Googleの認証画面を開けませんでした。');
-            }
-          });
-          tokenClient.requestAccessToken({ prompt: 'consent' });
-        } catch (error) {
+        if (!requestGoogleAccess(false)) {
           button.disabled = false;
-          button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
-          setError(error.message || 'Google認証を開始できませんでした。');
+          button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
         }
       });
       container.replaceChildren(button);
-      setStatus('ログインすると、アカウント情報とスプレッドシートへのアクセス許可をまとめて求めます。');
+      if (currentUser) {
+        setStatus('保存済みのGoogleアカウントを確認中です。');
+        // OAuth access tokens expire after a short time and are intentionally not stored.
+        // Reuse the user's previous Google grant quietly when the browser permits it.
+        requestGoogleAccess(true);
+      } else {
+        setStatus('Googleアカウントで接続すると、予定表と授業時間数を自動で確認します。');
+      }
     } catch (error) {
       setError(error.message || 'Googleログインを初期化できませんでした。');
       setStatus('Googleログインを利用できません', true);
