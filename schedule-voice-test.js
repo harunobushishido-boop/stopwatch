@@ -21,7 +21,7 @@
       }
       button.disabled = true;
       button.textContent = '再生中…';
-      message.textContent = 'WEB版VOICEVOX API（四国めたん・ノーマル）を準備しています…';
+      message.textContent = '保存済み高速APIキーがあれば高速APIを優先し、失敗時は低速APIへ切り替えます…';
       try {
         await speak(TEXT);
         const status = document.getElementById('pcScheduleAnnouncementStatus');
