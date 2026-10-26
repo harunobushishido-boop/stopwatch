@@ -72,7 +72,7 @@
       console.error('Schedule spreadsheet connection failed', error);
     } finally {
       connectButton.disabled = false;
-      connectButton.textContent = '今日の予定シートを確認';
+      connectButton.textContent = '明日の持ち物シートを確認';
     }
   }
 
@@ -320,7 +320,7 @@
 
     const scheduleSheet = (meta.sheets || []).find(sheet => sheet.properties && sheet.properties.title === '予定');
     const sheetId = scheduleSheet && scheduleSheet.properties && scheduleSheet.properties.sheetId;
-    if (!Number.isInteger(sheetId)) throw new Error('今日の予定シートのIDを取得できませんでした。');
+    if (!Number.isInteger(sheetId)) throw new Error('明日の持ち物シートの「予定」タブを確認できませんでした。');
 
     const oldData = await requestJson(base + '/values/' + encodeURIComponent("'予定'!A1:Z200"));
     const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
@@ -574,7 +574,7 @@
       const auth = window.PC_AUTH;
       if (auth && auth.getAccessToken && auth.getAccessToken()) {
         autoCreateScheduleSpreadsheet().catch(error => {
-          renderScheduleSheetNotice(null, '今日の予定スプレッドシートを自動作成できませんでした。' + (error.message || '不明なエラー'));
+          renderScheduleSheetNotice(null, '明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
           console.error('Schedule spreadsheet auto-create failed', error);
         });
       }
@@ -604,7 +604,7 @@
     errorNode.hidden = true;
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px';
-    connectButton = makeButton('今日の予定シートを確認', true);
+    connectButton = makeButton('明日の持ち物シートを確認', true);
     testButton = makeButton('持ち物テスト（明日の持ち物を発表）', true);
     actions.append(connectButton, testButton);
     testOutput = document.createElement('div');
