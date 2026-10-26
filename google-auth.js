@@ -253,8 +253,10 @@
           try {
             if (!response || !response.access_token) {
               if (wasSilent) {
+                button.dataset.pcConsentFallback = '1';
+                button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントで接続';
                 setStatus(currentUser
-                  ? '保存済みのGoogleアカウントを確認しました。シート接続に失敗した場合は「Googleへのアクセスを再接続」を押してください。'
+                  ? '保存済みアカウントの接続を自動復旧できませんでした。もう一度「Googleへのアクセスを再許可」を押してください。'
                   : 'Googleスプレッドシートを使うには、Googleアカウントで接続してください。');
                 return;
               }
@@ -303,8 +305,9 @@
           button.disabled = false;
           button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
           if (wasSilent) {
+            button.dataset.pcConsentFallback = '1';
             setStatus(currentUser
-              ? '保存済みのGoogleアカウントがあります。自動接続できない場合は「Googleへのアクセスを再接続」を押してください。'
+              ? '保存済みアカウントの接続を自動復旧できませんでした。必要なら「Googleへのアクセスを再許可」を押してください。'
               : 'Googleスプレッドシートを使うときは、Googleアカウントで接続してください。');
             return;
           }
@@ -319,7 +322,9 @@
         if (tokenRequestActive) return;
         button.disabled = true;
         button.textContent = 'Googleに接続中…';
-        if (!requestGoogleAccess(false)) {
+        const useConsent = button.dataset.pcConsentFallback === '1' || !currentUser;
+        delete button.dataset.pcConsentFallback;
+        if (!requestGoogleAccess(!useConsent)) {
           button.disabled = false;
           button.textContent = currentUser ? 'Googleへのアクセスを再接続' : 'Googleアカウントでログインして接続';
         }
