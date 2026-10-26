@@ -575,7 +575,7 @@
     url.searchParams.set('current', 'temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code');
     url.searchParams.set('hourly', 'temperature_2m,precipitation_probability,weather_code');
     url.searchParams.set('daily', 'weather_code,precipitation_probability_max,temperature_2m_min,temperature_2m_max');
-    url.searchParams.set('wind_speed_unit', 'kmh');
+    url.searchParams.set('wind_speed_unit', 'ms');
     const data = await requestJson(url.toString(), 9000);
     const hourly = data && data.hourly;
     const daily = data && data.daily;
