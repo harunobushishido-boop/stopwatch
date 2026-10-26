@@ -1147,14 +1147,24 @@ html.gh-fullscreen-active .clk-shell--panel-open .clk-controls {
       }
     }
 
-    shell.style.setProperty("--gh-right-sidebar-width", width + "px");
+    var nextWidthValue = width + "px";
+    // This script observes DOM attributes, including its own shell style. Only mutate when the value truly changes.
+    if (shell.style.getPropertyValue("--gh-right-sidebar-width") !== nextWidthValue) {
+      shell.style.setProperty("--gh-right-sidebar-width", nextWidthValue);
+    }
   }
 
   window.addEventListener("resize", updateToolbarOffset, { passive: true });
   window.addEventListener("orientationchange", updateToolbarOffset, { passive: true });
 
+  var toolbarOffsetUpdateScheduled = false;
   var observer = new MutationObserver(function () {
-    requestAnimationFrame(updateToolbarOffset);
+    if (toolbarOffsetUpdateScheduled) return;
+    toolbarOffsetUpdateScheduled = true;
+    requestAnimationFrame(function () {
+      toolbarOffsetUpdateScheduled = false;
+      updateToolbarOffset();
+    });
   });
   observer.observe(document.documentElement, { attributes: true, childList: true, subtree: true });
 
