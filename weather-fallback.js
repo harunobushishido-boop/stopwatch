@@ -347,264 +347,314 @@
   }
 
 
-  const GOOGLE_WEATHER_KEY_STORAGE = 'pc-google-weather-api-key-v1';
+  const WEATHERAPI_KEY_STORAGE = 'pc-weatherapi-key-v1';
+  const YAHOO_YOLP_KEY_STORAGE = 'pc-yahoo-yolp-appid-v1';
 
-  function readGoogleWeatherKey() {
-    try { return String(localStorage.getItem(GOOGLE_WEATHER_KEY_STORAGE) || '').trim(); }
+  function readStoredWeatherKey(storageKey) {
+    try { return String(localStorage.getItem(storageKey) || '').trim(); }
     catch (error) { return ''; }
   }
 
-  function googleConditionCode(condition) {
-    const value = String(condition && (condition.type || (condition.description && condition.description.text)) || '').toUpperCase();
-    if (value.includes('THUNDER')) return '308';
-    if (value.includes('BLIZZARD')) return '407';
-    if (value.includes('SNOW') || value.includes('SLEET') || value.includes('ICE')) return '400';
-    if (value.includes('FREEZING') || value.includes('RAIN_AND_SNOW')) return '303';
-    if (value.includes('RAIN') || value.includes('SHOWER') || value.includes('DRIZZLE')) return '300';
-    if (value.includes('FOG') || value.includes('HAZE')) return '209';
-    if (value.includes('PARTLY_CLOUDY')) return '201';
-    if (value.includes('MOSTLY_CLOUDY') || value === 'CLOUDY' || value.includes('OVERCAST')) return '200';
-    if (value.includes('MOSTLY_CLEAR')) return '101';
-    if (value.includes('CLEAR') || value.includes('SUNNY')) return '100';
-    return '200';
-  }
-
-  function jstIsoFromDateParts(dateParts) {
-    if (!dateParts || !Number.isFinite(Number(dateParts.year)) ||
-        !Number.isFinite(Number(dateParts.month)) || !Number.isFinite(Number(dateParts.day))) return '';
-    const year = String(dateParts.year).padStart(4, '0');
-    const month = String(dateParts.month).padStart(2, '0');
-    const day = String(dateParts.day).padStart(2, '0');
-    const hour = String(Number(dateParts.hours || 0)).padStart(2, '0');
-    return year + '-' + month + '-' + day + 'T' + hour + ':00:00+09:00';
-  }
-
-  function jstIsoFromTimestamp(iso) {
-    const date = new Date(iso);
-    if (!Number.isFinite(date.getTime())) return '';
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
-    }).formatToParts(date).reduce(function (out, item) {
-      if (item.type !== 'literal') out[item.type] = item.value;
-      return out;
-    }, {});
-    return parts.year + '-' + parts.month + '-' + parts.day + 'T' +
-      parts.hour + ':' + parts.minute + ':' + parts.second + '+09:00';
-  }
-
-  function googleHourIso(hour) {
-    return jstIsoFromDateParts(hour && hour.displayDateTime) ||
-      jstIsoFromTimestamp(hour && hour.interval && hour.interval.startTime);
-  }
-
-  function googleDayIso(day) {
-    const d = day && day.displayDate;
-    if (d && Number.isFinite(Number(d.year)) && Number.isFinite(Number(d.month)) && Number.isFinite(Number(d.day))) {
-      return String(d.year).padStart(4, '0') + '-' + String(d.month).padStart(2, '0') + '-' +
-        String(d.day).padStart(2, '0') + 'T00:00:00+09:00';
+  function weatherApiConditionCode(condition) {
+    const description = String(condition && condition.text || '').toLowerCase();
+    const code = Number(condition && condition.code);
+    if (description.includes('thunder') || [1087, 1273, 1276, 1279, 1282].includes(code)) {
+      return (description.includes('snow') || code === 1279 || code === 1282) ? '407' : '308';
     }
-    return jstIsoFromTimestamp(day && day.interval && day.interval.startTime).slice(0, 25);
+    if (description.includes('blizzard') || description.includes('snow') ||
+        description.includes('sleet') || description.includes('ice pellet') ||
+        [1066, 1069, 1072, 1114, 1117, 1168, 1171, 1198, 1201, 1204, 1207,
+          1210, 1213, 1216, 1219, 1222, 1225, 1237, 1249, 1252, 1255, 1258, 1261, 1264].includes(code)) {
+      return description.includes('rain') || description.includes('freezing') ? '303' : '400';
+    }
+    if (description.includes('rain') || description.includes('drizzle') ||
+        description.includes('shower') || description.includes('freezing rain') ||
+        [1063, 1150, 1153, 1180, 1183, 1186, 1189, 1192, 1195, 1240, 1243, 1246].includes(code)) return '300';
+    if (description.includes('fog') || description.includes('mist') || description.includes('haze') ||
+        [1030, 1135, 1147].includes(code)) return '209';
+    if (description.includes('partly cloudy') || code === 1003) return '201';
+    if (description.includes('cloud') || description.includes('overcast') || code === 1006 || code === 1009) return '200';
+    if (description.includes('clear') || description.includes('sunny') || code === 1000) return '100';
+    return '';
   }
 
-  function numericField(value) {
-    return value && Number.isFinite(Number(value.degrees)) ? Number(value.degrees) : '';
+  function weatherApiDateTime(value) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    if (/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(text)) return text;
+    return text.replace(' ', 'T') + ':00+09:00';
   }
 
-  function kmhFromWind(wind) {
-    if (!wind || !wind.speed || !Number.isFinite(Number(wind.speed.value))) return '';
-    const value = Number(wind.speed.value);
-    const unit = String(wind.speed.unit || '').toUpperCase();
-    if (unit === 'METERS_PER_SECOND' || unit === 'M/S') return Math.round(value * 3.6 * 10) / 10;
-    if (unit === 'MILES_PER_HOUR' || unit === 'MPH') return Math.round(value * 1.609344 * 10) / 10;
-    return value;
+  function weatherApiDayTime(value) {
+    const text = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text + 'T00:00:00+09:00' : weatherApiDateTime(text);
   }
 
-  async function getGoogleWeatherForecast(lat, lon, name, key) {
-    const base = 'https://weather.googleapis.com/v1/';
-    function apiUrl(path, extras) {
-      const params = new URLSearchParams({
-        key: key,
-        'location.latitude': String(lat),
-        'location.longitude': String(lon)
+  function finiteNumber(value) {
+    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+      ? Number(value) : '';
+  }
+
+  async function getWeatherApiForecast(lat, lon, name, key) {
+    const params = new URLSearchParams({
+      key: key,
+      q: Number(lat) + ',' + Number(lon),
+      days: '3',
+      aqi: 'no',
+      alerts: 'no',
+      lang: 'ja'
+    });
+    const data = await requestJson('https://api.weatherapi.com/v1/forecast.json?' + params.toString(), 10000);
+    if (data.error) {
+      throw new Error('WeatherAPI.com: ' + String(data.error.message || data.error.code || 'APIエラー'));
+    }
+    const current = data.current;
+    const forecastDays = data.forecast && Array.isArray(data.forecast.forecastday)
+      ? data.forecast.forecastday : [];
+    if (!current || !current.condition || !forecastDays.length) {
+      throw new Error('WeatherAPI.comから予報データが返りませんでした。APIキー・利用上限・場所を確認してください。');
+    }
+
+    const hourly = [];
+    forecastDays.forEach(function (day) {
+      (Array.isArray(day.hour) ? day.hour : []).forEach(function (hour) {
+        const iso = weatherApiDateTime(hour.time);
+        if (iso) hourly.push({ iso: iso, data: hour });
       });
-      Object.keys(extras || {}).forEach(function (field) { params.set(field, String(extras[field])); });
-      return base + path + '?' + params.toString();
-    }
+    });
+    if (!hourly.length) throw new Error('WeatherAPI.comの時間別予報が空でした。');
 
-    const results = await Promise.all([
-      requestJson(apiUrl('currentConditions:lookup'), 9000),
-      requestJson(apiUrl('forecast/hours:lookup', { hours: 48 }), 9000),
-      requestJson(apiUrl('forecast/days:lookup', { days: 10 }), 9000)
-    ]);
-    const current = results[0];
-    const hours = Array.isArray(results[1] && results[1].forecastHours) ? results[1].forecastHours : [];
-    const days = Array.isArray(results[2] && results[2].forecastDays) ? results[2].forecastDays : [];
-    if (!current || !current.weatherCondition || !hours.length || !days.length) {
-      throw new Error('Google Weather API から必要な予報項目が返りませんでした。APIの有効化・キー・利用上限を確認してください。');
-    }
-
-    const hourTimes = hours.map(googleHourIso);
+    const areaName = name || '仙台市立富沢小学校';
+    const area = { name: areaName, code: 'weatherapi' };
     const hourlyWeather = {
-      timeDefines: hourTimes,
-      areas: [{
-        area: { name: name || '富沢小学校', code: 'google-weather' },
-        weatherCodes: hours.map(function (item) { return googleConditionCode(item.weatherCondition); })
-      }]
+      timeDefines: hourly.map(function (item) { return item.iso; }),
+      areas: [{ area: area, weatherCodes: hourly.map(function (item) {
+        return weatherApiConditionCode(item.data.condition);
+      }) }]
     };
     const hourlyRain = {
-      timeDefines: hourTimes,
-      areas: [{
-        area: { name: name || '富沢小学校', code: 'google-weather' },
-        pops: hours.map(function (item) {
-          const percent = item && item.precipitation && item.precipitation.probability && item.precipitation.probability.percent;
-          return Number.isFinite(Number(percent)) ? String(Math.round(Number(percent))) : '';
-        })
-      }]
+      timeDefines: hourly.map(function (item) { return item.iso; }),
+      areas: [{ area: area, pops: hourly.map(function (item) {
+        return finiteNumber(item.data.chance_of_rain) === '' ? '' : String(Math.round(Number(item.data.chance_of_rain)));
+      }) }]
     };
     const hourlyTemp = {
-      timeDefines: hourTimes,
-      areas: [{
-        area: { name: name || '富沢小学校', code: 'google-weather' },
-        temps: hours.map(function (item) { return numericField(item && item.temperature); })
-      }]
+      timeDefines: hourly.map(function (item) { return item.iso; }),
+      areas: [{ area: area, temps: hourly.map(function (item) { return finiteNumber(item.data.temp_c); }) }]
     };
 
-    const dayTimes = days.map(googleDayIso);
+    const dayTimes = forecastDays.map(function (day) { return weatherApiDayTime(day.date); });
     const dailyWeather = {
       timeDefines: dayTimes,
-      areas: [{
-        area: { name: name || '富沢小学校', code: 'google-weather' },
-        weatherCodes: days.map(function (item) {
-          const condition = item && (item.daytimeForecast || item.nighttimeForecast);
-          return googleConditionCode(condition && condition.weatherCondition);
-        }),
-        pops: days.map(function (item) {
-          const dayPercent = item && item.daytimeForecast && item.daytimeForecast.precipitation &&
-            item.daytimeForecast.precipitation.probability && item.daytimeForecast.precipitation.probability.percent;
-          const nightPercent = item && item.nighttimeForecast && item.nighttimeForecast.precipitation &&
-            item.nighttimeForecast.precipitation.probability && item.nighttimeForecast.precipitation.probability.percent;
-          const values = [dayPercent, nightPercent].filter(function (v) { return Number.isFinite(Number(v)); }).map(Number);
-          return values.length ? String(Math.max.apply(null, values)) : '';
+      areas: [{ area: area,
+        weatherCodes: forecastDays.map(function (day) { return weatherApiConditionCode(day.day && day.day.condition); }),
+        pops: forecastDays.map(function (day) {
+          const value = day.day && day.day.daily_chance_of_rain;
+          return finiteNumber(value) === '' ? '' : String(Math.round(Number(value)));
         })
       }]
     };
     const dailyTemps = {
       timeDefines: dayTimes,
-      areas: [{
-        area: { name: name || '富沢小学校', code: 'google-weather' },
-        tempsMin: days.map(function (item) { return numericField(item && item.minTemperature); }),
-        tempsMax: days.map(function (item) { return numericField(item && item.maxTemperature); })
+      areas: [{ area: area,
+        tempsMin: forecastDays.map(function (day) { return finiteNumber(day.day && day.day.mintemp_c); }),
+        tempsMax: forecastDays.map(function (day) { return finiteNumber(day.day && day.day.maxtemp_c); })
       }]
     };
 
+    const currentCode = weatherApiConditionCode(current.condition);
     const result = attachMeta([
-      { publishingOffice: 'Google Weather API', timeSeries: [hourlyWeather, hourlyRain, hourlyTemp] },
-      { publishingOffice: 'Google Weather API', timeSeries: [dailyWeather, dailyTemps] }
+      { publishingOffice: 'WeatherAPI.com', timeSeries: [hourlyWeather, hourlyRain, hourlyTemp] },
+      { publishingOffice: 'WeatherAPI.com', timeSeries: [dailyWeather, dailyTemps] }
     ], Date.now(), false, {
-      time: current.currentTime || new Date().toISOString(),
-      temp: numericField(current.temperature),
-      humidity: Number.isFinite(Number(current.relativeHumidity)) ? Number(current.relativeHumidity) : '',
-      apparentTemp: numericField(current.feelsLikeTemperature),
-      wind: kmhFromWind(current.wind),
-      windDirection: current.wind && current.wind.direction && current.wind.direction.cardinal || '',
-      precipitation: current.precipitation && current.precipitation.probability &&
-        Number.isFinite(Number(current.precipitation.probability.percent)) ? Number(current.precipitation.probability.percent) : '',
-      code: googleConditionCode(current.weatherCondition),
-      isDay: Boolean(current.isDaytime)
+      time: weatherApiDateTime(current.last_updated),
+      temp: finiteNumber(current.temp_c),
+      humidity: finiteNumber(current.humidity),
+      apparentTemp: finiteNumber(current.feelslike_c),
+      wind: finiteNumber(current.wind_kph),
+      windDirection: String(current.wind_dir || ''),
+      precipitation: finiteNumber(current.precip_mm),
+      code: currentCode,
+      isDay: Number(current.is_day) === 1
     });
-    result.__source = 'Google Weather API';
-    result.__googleWeather = true;
+    result.__source = 'WeatherAPI.com';
+    result.__weatherApi = true;
     return result;
   }
 
-  async function getPreferredForecast(lat, lon, name) {
-    const key = readGoogleWeatherKey();
-    if (!key) return getJmaForecast(lat, lon, name);
-    try {
-      return await getGoogleWeatherForecast(Number(lat), Number(lon), name, key);
-    } catch (googleError) {
-      try {
-        const fallback = await getJmaForecast(lat, lon, name);
-        fallback.__source = '気象庁（Google Weather API 接続失敗時の予備）';
-        fallback.__providerError = String(googleError && googleError.message || googleError);
-        return fallback;
-      } catch (jmaError) {
-        throw new Error('Google Weather API: ' + String(googleError && googleError.message || googleError) +
-          ' / 気象庁: ' + String(jmaError && jmaError.message || jmaError));
+  function getYahooRainfallJsonp(lat, lon, appId) {
+    return new Promise(function (resolve, reject) {
+      const callbackName = '__pcYahooRain_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+      const script = document.createElement('script');
+      let settled = false;
+      const timer = setTimeout(function () {
+        finish(new Error('Yahoo!雨情報APIがタイムアウトしました。Client IDと利用条件を確認してください。'));
+      }, 9000);
+      function finish(error, value) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        script.onerror = null;
+        if (script.parentNode) script.parentNode.removeChild(script);
+        try { delete window[callbackName]; } catch (ignored) { window[callbackName] = undefined; }
+        if (error) reject(error); else resolve(value);
       }
-    }
+      window[callbackName] = function (payload) {
+        const resultInfo = payload && payload.YDF && payload.YDF.ResultInfo;
+        if (!payload || !payload.YDF || (resultInfo && Number(resultInfo.Status) !== 200)) {
+          finish(new Error('Yahoo!雨情報APIから正常な応答がありませんでした。'));
+          return;
+        }
+        finish(null, payload);
+      };
+      const params = new URLSearchParams({
+        appid: appId,
+        coordinates: Number(lon) + ',' + Number(lat),
+        output: 'json',
+        callback: callbackName,
+        interval: '10',
+        past: '1'
+      });
+      script.async = true;
+      script.src = 'https://map.yahooapis.jp/weather/V1/place?' + params.toString();
+      script.onerror = function () {
+        finish(new Error('Yahoo!雨情報APIに接続できませんでした。'));
+      };
+      document.head.appendChild(script);
+    });
   }
 
-  function installGoogleWeatherSettings() {
+  async function getYahooRainfall(lat, lon, appId) {
+    const payload = await getYahooRainfallJsonp(lat, lon, appId);
+    const rawFeature = payload && payload.YDF && payload.YDF.Feature;
+    const features = Array.isArray(rawFeature) ? rawFeature : (rawFeature ? [rawFeature] : []);
+    const rawWeather = features[0] && features[0].Property &&
+      features[0].Property.WeatherList && features[0].Property.WeatherList.Weather;
+    const weather = Array.isArray(rawWeather) ? rawWeather : (rawWeather ? [rawWeather] : []);
+    const sorted = weather.map(function (item) {
+      const stamp = String(item && item.Date || '');
+      const rainfall = finiteNumber(item && item.Rainfall);
+      return { type: String(item && item.Type || ''), stamp: stamp, rainfall: rainfall };
+    }).filter(function (item) { return item.rainfall !== '' && /^\d{12}$/.test(item.stamp); })
+      .sort(function (a, b) { return a.stamp.localeCompare(b.stamp); });
+    if (!sorted.length) throw new Error('Yahoo!雨情報APIに雨の強さデータが含まれていません。');
+    const observed = sorted.filter(function (item) { return item.type === 'observation'; });
+    const predicted = sorted.filter(function (item) { return item.type === 'forecast'; });
+    const current = observed.length ? observed[observed.length - 1] : sorted[0];
+    const nextHour = predicted.length ? predicted[predicted.length - 1] : sorted[sorted.length - 1];
+    return { current: current.rainfall, nextHour: nextHour.rainfall, updatedAt: current.stamp };
+  }
+
+  async function getPreferredForecast(lat, lon, name) {
+    const key = readStoredWeatherKey(WEATHERAPI_KEY_STORAGE);
+    let forecast;
+    if (!key) {
+      forecast = await getJmaForecast(lat, lon, name);
+      forecast.__source = '気象庁（WeatherAPI.com未設定のため予備データを使用）';
+    } else {
+      try {
+        forecast = await getWeatherApiForecast(Number(lat), Number(lon), name, key);
+      } catch (providerError) {
+        forecast = await getJmaForecast(lat, lon, name);
+        forecast.__source = '気象庁（WeatherAPI.com接続失敗時の予備）';
+        forecast.__providerError = String(providerError && providerError.message || providerError);
+      }
+    }
+
+    const yahooKey = readStoredWeatherKey(YAHOO_YOLP_KEY_STORAGE);
+    if (yahooKey) {
+      try {
+        forecast.__yahooRainfall = await getYahooRainfall(lat, lon, yahooKey);
+      } catch (yahooError) {
+        forecast.__yahooError = String(yahooError && yahooError.message || yahooError);
+      }
+    }
+    return forecast;
+  }
+
+  function installWeatherProviderSettings() {
     const host = document.querySelector('.clk-weather__privacy');
-    if (!host || document.getElementById('pcGoogleWeatherSettings')) return;
+    if (!host || document.getElementById('pcWeatherProviderSettings')) return;
     const panel = document.createElement('section');
-    panel.id = 'pcGoogleWeatherSettings';
+    panel.id = 'pcWeatherProviderSettings';
     panel.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid #00000018;color:inherit';
     panel.innerHTML =
-      '<strong style="display:block;font-size:12px;margin-bottom:6px">Google Weather API（任意）</strong>' +
-      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 8px">Googleの予報を優先して使います。キーはこのブラウザー内だけに保存し、GitHubには書き込みません。キー未設定・通信失敗時は気象庁の予報へ戻ります。通常キーを使う場合は、Google Cloudで利用元サイトとWeather APIに制限を設定してください。</p>' +
-      '<label for="pcGoogleWeatherKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">Google Weather API キー</label>' +
-      '<input id="pcGoogleWeatherKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Googleから取得したキーを貼り付け" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
+      '<strong style="display:block;font-size:12px;margin-bottom:6px">高精度天気API設定（任意）</strong>' +
+      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 10px">WeatherAPI.comの天気予報を優先し、キー未設定・接続失敗時は気象庁の予報へ戻ります。無料プランは1日ごとの予報が3日分です。キーはこのブラウザー内だけに保存され、GitHubには書き込みません。公開サイトでは、キーの使用量制限を設定してください。</p>' +
+      '<label for="pcWeatherApiKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">WeatherAPI.com APIキー</label>' +
+      '<input id="pcWeatherApiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="WeatherAPI.comで取得したキー" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
       '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
-      '<button type="button" id="pcGoogleWeatherSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">キーを保存して再取得</button>' +
-      '<button type="button" id="pcGoogleWeatherDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">Google APIを無効化</button>' +
+      '<button type="button" id="pcWeatherApiSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">予報APIキーを保存して再取得</button>' +
+      '<button type="button" id="pcWeatherApiDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">予報APIを無効化</button>' +
       '</div>' +
-      '<p id="pcGoogleWeatherStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 0"></p>' +
-      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0"><a href="https://developers.google.com/maps/documentation/weather/demo-key?hl=ja" target="_blank" rel="noopener noreferrer">Googleの無料デモキー取得・説明</a>（試用向け。継続運用にはGoogle Cloudの設定が必要です）</p>' +
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:8px">' +
+      '<p id="pcWeatherApiStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 12px"></p>' +
+      '<p style="font-size:11px;line-height:1.6;margin:0 0 15px"><a href="https://www.weatherapi.com/signup.aspx" target="_blank" rel="noopener noreferrer">WeatherAPI.comの無料登録・キー取得</a> · <a href="https://www.weatherapi.com/docs/forecast-api/" target="_blank" rel="noopener noreferrer">予報APIの仕様</a></p>' +
+      '<div style="padding-top:12px;border-top:1px solid #00000018">' +
+      '<strong style="display:block;font-size:12px;margin-bottom:6px">Yahoo! JAPAN 雨情報API（任意）</strong>' +
+      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 8px">Yahoo!の公式APIは雨の強さの実測値と60分先までの予測に対応します。気温や週間予報は含まれないため、上の予報APIの代わりではなく補助データとして使います。</p>' +
+      '<label for="pcYahooYolpKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">Yahoo! YOLP Client ID</label>' +
+      '<input id="pcYahooYolpKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Yahoo!デベロッパーネットワークのClient ID" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
+      '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
+      '<button type="button" id="pcYahooYolpSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">Yahoo! Client IDを保存</button>' +
+      '<button type="button" id="pcYahooYolpDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">Yahoo!雨情報を無効化</button>' +
+      '</div>' +
+      '<p id="pcYahooYolpStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 0"></p>' +
+      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0"><a href="https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html" target="_blank" rel="noopener noreferrer">Yahoo!公式 気象情報APIの説明</a></p>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:14px">' +
       '<a href="https://www.google.com/search?q=%E4%BB%99%E5%8F%B0%E5%B8%82%E5%A4%AA%E7%99%BD%E5%8C%BA+%E5%AF%8C%E6%B2%A2+%E5%A4%A9%E6%B0%97" target="_blank" rel="noopener noreferrer">Googleで天気を見る</a>' +
       '<a href="https://weathernews.jp/" target="_blank" rel="noopener noreferrer">ウェザーニュース</a>' +
       '<a href="https://weather.yahoo.co.jp/weather/" target="_blank" rel="noopener noreferrer">Yahoo!天気</a>' +
       '</div>';
     host.appendChild(panel);
-    const input = panel.querySelector('#pcGoogleWeatherKeyInput');
-    const status = panel.querySelector('#pcGoogleWeatherStatus');
-    const save = panel.querySelector('#pcGoogleWeatherSave');
-    const disable = panel.querySelector('#pcGoogleWeatherDisable');
-    function updateStatus(message) {
-      status.textContent = message;
-      status.style.color = '#555';
-    }
-    const savedKey = readGoogleWeatherKey();
-    updateStatus(savedKey ? 'Google Weather API キーは保存済みです（キー自体は表示していません）。' : 'Google API未設定：現在は気象庁の予報を使用しています。');
-    save.addEventListener('click', function () {
-      const value = String(input.value || '').trim();
-      if (!value) {
-        updateStatus('Google APIキーを入力してください。');
-        return;
-      }
-      try {
-        localStorage.setItem(GOOGLE_WEATHER_KEY_STORAGE, value);
+
+    function wireKey(storageKey, inputId, statusId, saveId, disableId, label) {
+      const input = panel.querySelector('#' + inputId);
+      const status = panel.querySelector('#' + statusId);
+      const save = panel.querySelector('#' + saveId);
+      const disable = panel.querySelector('#' + disableId);
+      function update(message) { status.textContent = message; status.style.color = '#555'; }
+      const existing = readStoredWeatherKey(storageKey);
+      update(existing ? label + 'は保存済みです（キー自体は表示していません）。' : label + 'は未設定です。');
+      save.addEventListener('click', function () {
+        const value = String(input.value || '').trim();
+        if (!value) { update(label + 'を入力してください。'); return; }
+        try {
+          localStorage.setItem(storageKey, value);
+          input.value = '';
+          update(label + 'をこのブラウザーに保存しました。天気を再取得します。');
+          const refresh = document.querySelector('.clk-weather__refresh-btn');
+          if (refresh) refresh.click();
+        } catch (error) {
+          update('ブラウザーに保存できませんでした。ブラウザーの保存設定を確認してください。');
+        }
+      });
+      disable.addEventListener('click', function () {
+        try { localStorage.removeItem(storageKey); } catch (error) {}
         input.value = '';
-        updateStatus('キーをこのブラウザーに保存しました。予報を再取得します。');
+        update(label + 'を無効化しました。');
         const refresh = document.querySelector('.clk-weather__refresh-btn');
         if (refresh) refresh.click();
-      } catch (error) {
-        updateStatus('ブラウザーに保存できませんでした。プライベート閲覧設定などを確認してください。');
-      }
-    });
-    disable.addEventListener('click', function () {
-      try { localStorage.removeItem(GOOGLE_WEATHER_KEY_STORAGE); } catch (error) {}
-      input.value = '';
-      updateStatus('Google APIを無効化しました。気象庁の予報へ切り替えます。');
-      const refresh = document.querySelector('.clk-weather__refresh-btn');
-      if (refresh) refresh.click();
-    });
+      });
+    }
+    wireKey(WEATHERAPI_KEY_STORAGE, 'pcWeatherApiKeyInput', 'pcWeatherApiStatus',
+      'pcWeatherApiSave', 'pcWeatherApiDisable', 'WeatherAPI.com APIキー');
+    wireKey(YAHOO_YOLP_KEY_STORAGE, 'pcYahooYolpKeyInput', 'pcYahooYolpStatus',
+      'pcYahooYolpSave', 'pcYahooYolpDisable', 'Yahoo! YOLP Client ID');
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installGoogleWeatherSettings, { once: true });
+    document.addEventListener('DOMContentLoaded', installWeatherProviderSettings, { once: true });
   } else {
-    installGoogleWeatherSettings();
+    installWeatherProviderSettings();
   }
 
   window.__weatherFallback = {
     getJmaForecast: getPreferredForecast,
     getForecast: getPreferredForecast,
     isValidForecast: isValidForecast,
-    hasGoogleWeatherKey: function () { return Boolean(readGoogleWeatherKey()); }
+    hasWeatherApiKey: function () { return Boolean(readStoredWeatherKey(WEATHERAPI_KEY_STORAGE)); },
+    hasYahooRainfallKey: function () { return Boolean(readStoredWeatherKey(YAHOO_YOLP_KEY_STORAGE)); }
   };
 
   // Keep the stopwatch history list independently scrollable.
