@@ -544,7 +544,7 @@
     panel.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid #00000018;color:inherit';
     panel.innerHTML =
       '<strong style="display:block;font-size:12px;margin-bottom:6px">Google Weather API（任意）</strong>' +
-      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 8px">Googleの予報を優先して使います。キーはこのブラウザー内だけに保存し、GitHubには書き込みません。キー未設定・通信失敗時は気象庁の予報へ戻ります。</p>' +
+      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 8px">Googleの予報を優先して使います。キーはこのブラウザー内だけに保存し、GitHubには書き込みません。キー未設定・通信失敗時は気象庁の予報へ戻ります。通常キーを使う場合は、Google Cloudで利用元サイトとWeather APIに制限を設定してください。</p>' +
       '<label for="pcGoogleWeatherKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">Google Weather API キー</label>' +
       '<input id="pcGoogleWeatherKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Googleから取得したキーを貼り付け" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
       '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
