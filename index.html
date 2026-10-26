@@ -703,7 +703,7 @@ const tg=document.createElement('div');tg.className='clk-group';tg.innerHTML='<s
 $$('button',tg).forEach(b=>{b.style.cssText='background:none;border:1px solid currentColor;border-radius:8px;padding:6px 12px;color:inherit;cursor:pointer;font-size:13px';b.onclick=()=>({vic,pop,se:beep,longest:playLongestRecordMusic})[b.dataset.s]()});sp.insertBefore(tg,sp.lastElementChild);
 const sndSt=()=>{$('#sndSt').textContent=ac&&ac.state==='running'?'音声：有効':'音声：ブロック中です。ページ内を一度クリックしてください'};sndSt();setInterval(sndSt,1000);
 {const cr=document.createElement('p');cr.className='clk-panel__footnote';cr.id='pcCredit';cr.style.textAlign='center';cr.textContent='制作者：宍戸陽信';panes[5].appendChild(cr)}
-window.__clkTimerApi={toggle:function(id){const t=tms.find(x=>x.id===Number(id));if(!t||t.done)return;toggleTimer(t);tmSave()},adjust:function(id,delta){const t=tms.find(x=>x.id===Number(id));if(!t)return;t.left=timerOverrun?Number(t.left)+Number(delta):Math.max(0,Number(t.left)+Number(delta));tmSave();rt()}};
+window.__clkTimerApi={toggle:function(id){const t=tms.find(x=>x.id===Number(id));if(!t||t.done)return;toggleTimer(t);tmSave()},setRunning:function(id,shouldRun){const t=tms.find(x=>x.id===Number(id));if(!t||t.done)return;if(shouldRun){if(t.left===0)t.left=t.tot;t.run=1;t.end=Date.now()+Number(t.left)*1000;tmArmed.add(t.id)}else{stopAl();if(t.run)t.left=Number.isFinite(t.end)?(timerOverrun?Math.ceil((t.end-Date.now())/1000):Math.max(0,Math.ceil((t.end-Date.now())/1000))):Number(t.left)||0;t.run=0;t.end=0;tmArmed.delete(t.id)}rt();tmSave()},adjust:function(id,delta){const t=tms.find(x=>x.id===Number(id));if(!t)return;t.left=timerOverrun?Number(t.left)+Number(delta):Math.max(0,Number(t.left)+Number(delta));tmSave();rt()}};
 tick();swSync();syncSw();
 })();
 </script><script>
@@ -1659,8 +1659,8 @@ q('#pcImportDataFile',exportGroup)?.addEventListener('change',async e=>{
 document.addEventListener('click',e=>{
  const button=e.target.closest('.clk-timer-circle__pause');if(!button)return;
  const circle=button.closest('.clk-timer-circle');if(!circle||!window.__clkTimerApi)return;
- e.preventDefault();e.stopImmediatePropagation();
- window.__clkTimerApi.toggle(Number(circle.dataset.timerId));
+ const action=button.getAttribute('aria-label');if(action!=='停止'&&action!=='再開')return;e.preventDefault();e.stopImmediatePropagation();
+ window.__clkTimerApi.setRunning(Number(circle.dataset.timerId),action==='再開');
 },true);
 })();
 </script>
