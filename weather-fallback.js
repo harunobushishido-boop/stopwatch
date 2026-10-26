@@ -276,4 +276,47 @@
     '.clk-stage--sw-main>.clk-sw-history-panel .clk-lap-list--scroll{flex:0 1 auto;min-height:0;max-height:min(38vh,320px)!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;scrollbar-width:thin}' +
     '@media(max-width:720px){.clk-stage--sw-main>.clk-sw-history-panel{max-height:56vh!important}.clk-stage--sw-main>.clk-sw-history-panel .clk-lap-list--scroll{max-height:42vh!important}}';
   (document.head || document.documentElement).appendChild(style);
+
+  // Keep the weather attribution accurate when the main page's inline renderer updates status text.
+  function applyJmaLabels() {
+    const sourceNote = document.querySelector('.clk-weather__source-note');
+    const root = sourceNote && sourceNote.closest('.clk-panel__pane') || document;
+    const sectionTitle = root.querySelector('.clk-weather__section-title');
+    if (sectionTitle) sectionTitle.textContent = sectionTitle.textContent.replace(/Open-Meteo/gi, '気象庁');
+    for (const selector of ['.clk-weather__source-note', '.clk-weather__privacy-note', '.clk-weather__feels']) {
+      const node = root.querySelector(selector);
+      if (!node) continue;
+      node.textContent = node.textContent
+        .replace(/Open-Meteo/gi, '気象庁')
+        .replace('現在値', '予報値')
+        .replace('時間別・7日間', '地域予報・週間予報')
+        .replace(
+          '富沢小学校周辺の座標を使い、気象庁から時間別予報と7日間の予報を取得します。予報は学校敷地そのものの観測値ではありません。',
+          '緯度・経度から都道府県の気象庁予報を取得します。気温は予報地点、天気と降水確率は地域予報で、学校敷地そのものの観測値ではありません。'
+        )
+        .replace(
+          '天気予報の取得には気象庁へ緯度・経度を送信します。GPSを使う場合は現在地の座標も送信されます。住所検索には国土地理院の住所検索APIを利用します。',
+          '位置から都道府県を特定するため、国土地理院の逆ジオコーディングを使います。天気の取得先は気象庁です。GPSを使う場合は現在地の座標を国土地理院へ送信します。'
+        );
+    }
+    const links = root.querySelectorAll('.clk-weather__source-links a');
+    if (links[0]) {
+      links[0].href = 'https://www.jma.go.jp/bosai/forecast/';
+      links[0].textContent = '気象庁公式サイト';
+    }
+    if (links[1]) {
+      links[1].href = 'https://www.data.jma.go.jp/developer/weatherdataguide/knowledge.html';
+      links[1].textContent = '気象データの説明';
+    }
+    root.querySelectorAll('.clk-weather-inline').forEach(button => {
+      button.title = button.ariaLabel = '気象庁の天気予報を開く';
+    });
+  }
+
+  applyJmaLabels();
+  const weatherRoot = document.querySelector('.clk-weather__source-note')?.closest('.clk-panel__pane');
+  if (weatherRoot) {
+    const labelObserver = new MutationObserver(applyJmaLabels);
+    labelObserver.observe(weatherRoot, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['title', 'aria-label', 'href'] });
+  }
 })();
