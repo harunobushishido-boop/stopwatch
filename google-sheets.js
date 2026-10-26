@@ -54,7 +54,13 @@
       const auth = window.PC_AUTH;
       const token = auth && auth.getAccessToken && auth.getAccessToken();
       const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
-      if (!token || !expiry || Date.now() >= expiry) throw new Error('先にGoogleアカウントでログインしてアクセスを許可してください。');
+      if (!token || !expiry || Date.now() >= expiry) {
+        setError('');
+        setStatus('Googleの保存済みアクセス許可を確認しています。自動接続できない場合はGoogleアカウント欄の「再接続」を押してください。');
+        const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
+        if (!requested) setError('Google接続がまだ準備できていません。ページの読み込みが終わってから再試行してください。');
+        return;
+      }
       accessToken = token;
       tokenExpiresAt = expiry;
       const record = await autoCreateScheduleSpreadsheet();
@@ -169,7 +175,10 @@
     const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
     const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
     if (!token || !expiry || Date.now() >= expiry) {
-      setError('先にGoogleアカウントでログインして、アクセスを許可してください。');
+      setError('');
+      setStatus('Google接続を確認しています。接続後に、もう一度「持ち物テスト」を押してください。');
+      const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
+      if (!requested) setError('Google接続が準備できていません。ページの読み込みが終わってから再試行してください。');
       return;
     }
 
@@ -374,6 +383,26 @@
           range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
           cell: { dataValidation: null },
           fields: 'dataValidation'
+        }
+      },
+      {
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 },
+          rule: {
+            condition: { type: 'ONE_OF_LIST', values: ['1', '2', '3', '4', '5', '6'].map(value => ({ userEnteredValue: value })) },
+            strict: true,
+            showCustomUi: true
+          }
+        }
+      },
+      {
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 },
+          rule: {
+            condition: { type: 'ONE_OF_LIST', values: ['通常', '特別'].map(value => ({ userEnteredValue: value })) },
+            strict: true,
+            showCustomUi: true
+          }
         }
       }
     ];
@@ -598,6 +627,7 @@
     if (activeScheduleRecord()) setStatus('自動作成した今日の予定シートを使用します。');
     window.PC_SHEETS = {
       connect,
+      ensureScheduleSpreadsheet: autoCreateScheduleSpreadsheet,
       get connected() { return Boolean(accessToken && Date.now() < tokenExpiresAt); }
     };
   }
