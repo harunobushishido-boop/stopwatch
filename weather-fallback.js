@@ -347,139 +347,11 @@
   }
 
 
-  const WEATHERAPI_KEY_STORAGE = 'pc-weatherapi-key-v1';
   const YAHOO_YOLP_KEY_STORAGE = 'pc-yahoo-yolp-appid-v1';
 
-  function readStoredWeatherKey(storageKey) {
-    try { return String(localStorage.getItem(storageKey) || '').trim(); }
+  function readYahooYolpKey() {
+    try { return String(localStorage.getItem(YAHOO_YOLP_KEY_STORAGE) || '').trim(); }
     catch (error) { return ''; }
-  }
-
-  function weatherApiConditionCode(condition) {
-    const description = String(condition && condition.text || '').toLowerCase();
-    const code = Number(condition && condition.code);
-    if (description.includes('thunder') || [1087, 1273, 1276, 1279, 1282].includes(code)) {
-      return (description.includes('snow') || code === 1279 || code === 1282) ? '407' : '308';
-    }
-    if (description.includes('blizzard') || description.includes('snow') ||
-        description.includes('sleet') || description.includes('ice pellet') ||
-        [1066, 1069, 1072, 1114, 1117, 1168, 1171, 1198, 1201, 1204, 1207,
-          1210, 1213, 1216, 1219, 1222, 1225, 1237, 1249, 1252, 1255, 1258, 1261, 1264].includes(code)) {
-      return description.includes('rain') || description.includes('freezing') ? '303' : '400';
-    }
-    if (description.includes('rain') || description.includes('drizzle') ||
-        description.includes('shower') || description.includes('freezing rain') ||
-        [1063, 1150, 1153, 1180, 1183, 1186, 1189, 1192, 1195, 1240, 1243, 1246].includes(code)) return '300';
-    if (description.includes('fog') || description.includes('mist') || description.includes('haze') ||
-        [1030, 1135, 1147].includes(code)) return '209';
-    if (description.includes('partly cloudy') || code === 1003) return '201';
-    if (description.includes('cloud') || description.includes('overcast') || code === 1006 || code === 1009) return '200';
-    if (description.includes('clear') || description.includes('sunny') || code === 1000) return '100';
-    return '';
-  }
-
-  function weatherApiDateTime(value) {
-    const text = String(value || '').trim();
-    if (!text) return '';
-    if (/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(text)) return text;
-    return text.replace(' ', 'T') + ':00+09:00';
-  }
-
-  function weatherApiDayTime(value) {
-    const text = String(value || '').trim();
-    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text + 'T00:00:00+09:00' : weatherApiDateTime(text);
-  }
-
-  function finiteNumber(value) {
-    return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
-      ? Number(value) : '';
-  }
-
-  async function getWeatherApiForecast(lat, lon, name, key) {
-    const params = new URLSearchParams({
-      key: key,
-      q: Number(lat) + ',' + Number(lon),
-      days: '3',
-      aqi: 'no',
-      alerts: 'no',
-      lang: 'ja'
-    });
-    const data = await requestJson('https://api.weatherapi.com/v1/forecast.json?' + params.toString(), 10000);
-    if (data.error) {
-      throw new Error('WeatherAPI.com: ' + String(data.error.message || data.error.code || 'APIエラー'));
-    }
-    const current = data.current;
-    const forecastDays = data.forecast && Array.isArray(data.forecast.forecastday)
-      ? data.forecast.forecastday : [];
-    if (!current || !current.condition || !forecastDays.length) {
-      throw new Error('WeatherAPI.comから予報データが返りませんでした。APIキー・利用上限・場所を確認してください。');
-    }
-
-    const hourly = [];
-    forecastDays.forEach(function (day) {
-      (Array.isArray(day.hour) ? day.hour : []).forEach(function (hour) {
-        const iso = weatherApiDateTime(hour.time);
-        if (iso) hourly.push({ iso: iso, data: hour });
-      });
-    });
-    if (!hourly.length) throw new Error('WeatherAPI.comの時間別予報が空でした。');
-
-    const areaName = name || '仙台市立富沢小学校';
-    const area = { name: areaName, code: 'weatherapi' };
-    const hourlyWeather = {
-      timeDefines: hourly.map(function (item) { return item.iso; }),
-      areas: [{ area: area, weatherCodes: hourly.map(function (item) {
-        return weatherApiConditionCode(item.data.condition);
-      }) }]
-    };
-    const hourlyRain = {
-      timeDefines: hourly.map(function (item) { return item.iso; }),
-      areas: [{ area: area, pops: hourly.map(function (item) {
-        return finiteNumber(item.data.chance_of_rain) === '' ? '' : String(Math.round(Number(item.data.chance_of_rain)));
-      }) }]
-    };
-    const hourlyTemp = {
-      timeDefines: hourly.map(function (item) { return item.iso; }),
-      areas: [{ area: area, temps: hourly.map(function (item) { return finiteNumber(item.data.temp_c); }) }]
-    };
-
-    const dayTimes = forecastDays.map(function (day) { return weatherApiDayTime(day.date); });
-    const dailyWeather = {
-      timeDefines: dayTimes,
-      areas: [{ area: area,
-        weatherCodes: forecastDays.map(function (day) { return weatherApiConditionCode(day.day && day.day.condition); }),
-        pops: forecastDays.map(function (day) {
-          const value = day.day && day.day.daily_chance_of_rain;
-          return finiteNumber(value) === '' ? '' : String(Math.round(Number(value)));
-        })
-      }]
-    };
-    const dailyTemps = {
-      timeDefines: dayTimes,
-      areas: [{ area: area,
-        tempsMin: forecastDays.map(function (day) { return finiteNumber(day.day && day.day.mintemp_c); }),
-        tempsMax: forecastDays.map(function (day) { return finiteNumber(day.day && day.day.maxtemp_c); })
-      }]
-    };
-
-    const currentCode = weatherApiConditionCode(current.condition);
-    const result = attachMeta([
-      { publishingOffice: 'WeatherAPI.com', timeSeries: [hourlyWeather, hourlyRain, hourlyTemp] },
-      { publishingOffice: 'WeatherAPI.com', timeSeries: [dailyWeather, dailyTemps] }
-    ], Date.now(), false, {
-      time: weatherApiDateTime(current.last_updated),
-      temp: finiteNumber(current.temp_c),
-      humidity: finiteNumber(current.humidity),
-      apparentTemp: finiteNumber(current.feelslike_c),
-      wind: finiteNumber(current.wind_kph),
-      windDirection: String(current.wind_dir || ''),
-      precipitation: finiteNumber(current.precip_mm),
-      code: currentCode,
-      isDay: Number(current.is_day) === 1
-    });
-    result.__source = 'WeatherAPI.com';
-    result.__weatherApi = true;
-    return result;
   }
 
   function getYahooRainfallJsonp(lat, lon, appId) {
@@ -488,7 +360,7 @@
       const script = document.createElement('script');
       let settled = false;
       const timer = setTimeout(function () {
-        finish(new Error('Yahoo!雨情報APIがタイムアウトしました。Client IDと利用条件を確認してください。'));
+        finish(new Error('Yahoo! JAPAN気象情報APIがタイムアウトしました。Client IDと利用条件を確認してください。'));
       }, 9000);
       function finish(error, value) {
         if (settled) return;
@@ -502,7 +374,7 @@
       window[callbackName] = function (payload) {
         const resultInfo = payload && payload.YDF && payload.YDF.ResultInfo;
         if (!payload || !payload.YDF || (resultInfo && Number(resultInfo.Status) !== 200)) {
-          finish(new Error('Yahoo!雨情報APIから正常な応答がありませんでした。'));
+          finish(new Error('Yahoo! JAPAN気象情報APIから正常な応答がありませんでした。'));
           return;
         }
         finish(null, payload);
@@ -518,7 +390,7 @@
       script.async = true;
       script.src = 'https://map.yahooapis.jp/weather/V1/place?' + params.toString();
       script.onerror = function () {
-        finish(new Error('Yahoo!雨情報APIに接続できませんでした。'));
+        finish(new Error('Yahoo! JAPAN気象情報APIに接続できませんでした。'));
       };
       document.head.appendChild(script);
     });
@@ -533,128 +405,114 @@
     const weather = Array.isArray(rawWeather) ? rawWeather : (rawWeather ? [rawWeather] : []);
     const sorted = weather.map(function (item) {
       const stamp = String(item && item.Date || '');
-      const rainfall = finiteNumber(item && item.Rainfall);
+      const rainfall = item && item.Rainfall !== undefined && Number.isFinite(Number(item.Rainfall))
+        ? Number(item.Rainfall) : '';
       return { type: String(item && item.Type || ''), stamp: stamp, rainfall: rainfall };
     }).filter(function (item) { return item.rainfall !== '' && /^\d{12}$/.test(item.stamp); })
       .sort(function (a, b) { return a.stamp.localeCompare(b.stamp); });
-    if (!sorted.length) throw new Error('Yahoo!雨情報APIに雨の強さデータが含まれていません。');
+    if (!sorted.length) throw new Error('Yahoo! JAPAN気象情報APIに雨の強さデータが含まれていません。');
     const observed = sorted.filter(function (item) { return item.type === 'observation'; });
     const predicted = sorted.filter(function (item) { return item.type === 'forecast'; });
     const current = observed.length ? observed[observed.length - 1] : sorted[0];
-    const nextHour = predicted.length ? predicted[predicted.length - 1] : sorted[sorted.length - 1];
-    return { current: current.rainfall, nextHour: nextHour.rainfall, updatedAt: current.stamp };
+    const nextHour = predicted.length ? predicted[predicted.length - 1] : null;
+    return {
+      current: current.rainfall,
+      nextHour: nextHour ? nextHour.rainfall : null,
+      updatedAt: current.stamp,
+      forecastAt: nextHour ? nextHour.stamp : '',
+      points: sorted.filter(function (item) { return item.type === 'forecast'; }).map(function (item) {
+        return { time: item.stamp, rainfall: item.rainfall };
+      })
+    };
   }
 
   async function getPreferredForecast(lat, lon, name) {
-    const key = readStoredWeatherKey(WEATHERAPI_KEY_STORAGE);
-    let forecast;
-    if (!key) {
-      forecast = await getJmaForecast(lat, lon, name);
-      forecast.__source = '気象庁（WeatherAPI.com未設定のため予備データを使用）';
-    } else {
-      try {
-        forecast = await getWeatherApiForecast(Number(lat), Number(lon), name, key);
-      } catch (providerError) {
-        forecast = await getJmaForecast(lat, lon, name);
-        forecast.__source = '気象庁（WeatherAPI.com接続失敗時の予備）';
-        forecast.__providerError = String(providerError && providerError.message || providerError);
-      }
+    // Yahoo! JAPAN's official weather API provides rainfall intensity only.
+    // Use the JMA feed for sky conditions, temperatures, and the weekly forecast.
+    const forecast = await getJmaForecast(lat, lon, name);
+    const yahooKey = readYahooYolpKey();
+    if (!yahooKey) {
+      forecast.__source = '気象庁（天気・週間予報）';
+      forecast.__yahooRainfall = null;
+      forecast.__yahooStatus = 'Yahoo! Client ID未設定';
+      return forecast;
     }
-
-    const yahooKey = readStoredWeatherKey(YAHOO_YOLP_KEY_STORAGE);
-    if (yahooKey) {
-      try {
-        forecast.__yahooRainfall = await getYahooRainfall(lat, lon, yahooKey);
-      } catch (yahooError) {
-        forecast.__yahooError = String(yahooError && yahooError.message || yahooError);
-      }
+    try {
+      forecast.__yahooRainfall = await getYahooRainfall(lat, lon, yahooKey);
+      forecast.__source = '気象庁（天気・週間予報）＋Yahoo! JAPAN（雨の強さ・60分先）';
+      forecast.__yahooStatus = 'Yahoo! JAPAN APIから取得';
+    } catch (yahooError) {
+      forecast.__yahooRainfall = null;
+      forecast.__yahooStatus = String(yahooError && yahooError.message || yahooError);
+      forecast.__source = '気象庁（天気・週間予報）';
     }
     return forecast;
   }
 
-  function installWeatherProviderSettings() {
+  function installYahooWeatherSettings() {
     const host = document.querySelector('.clk-weather__privacy');
-    if (!host || document.getElementById('pcWeatherProviderSettings')) return;
+    if (!host || document.getElementById('pcYahooWeatherSettings')) return;
     const panel = document.createElement('section');
-    panel.id = 'pcWeatherProviderSettings';
+    panel.id = 'pcYahooWeatherSettings';
     panel.style.cssText = 'margin-top:12px;padding-top:12px;border-top:1px solid #00000018;color:inherit';
     panel.innerHTML =
-      '<strong style="display:block;font-size:12px;margin-bottom:6px">高精度天気API設定（任意）</strong>' +
-      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 10px">WeatherAPI.comの天気予報を優先し、キー未設定・接続失敗時は気象庁の予報へ戻ります。無料プランは1日ごとの予報が3日分です。キーはこのブラウザー内だけに保存され、GitHubには書き込みません。公開サイトでは、キーの使用量制限を設定してください。</p>' +
-      '<label for="pcWeatherApiKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">WeatherAPI.com APIキー</label>' +
-      '<input id="pcWeatherApiKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="WeatherAPI.comで取得したキー" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
+      '<strong style="display:block;font-size:12px;margin-bottom:6px">Yahoo! JAPAN 気象情報API</strong>' +
+      '<p style="font-size:11.5px;line-height:1.6;margin:0 0 8px">Yahoo!の公式APIで、富沢小学校周辺の現在の雨の強さと約60分先までの雨の予測を表示します。気温・天気の種類・週間予報はこのAPIでは提供されないため、そこは気象庁の予報を使います。Client IDはこのブラウザー内だけに保存し、GitHubのソースコードには書き込みません。</p>' +
+      '<label for="pcYahooWeatherClientId" style="display:block;font-size:11.5px;margin-bottom:5px">Yahoo! YOLP Client ID</label>' +
+      '<input id="pcYahooWeatherClientId" type="password" autocomplete="off" spellcheck="false" placeholder="Yahoo!デベロッパーネットワークのClient ID" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
       '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
-      '<button type="button" id="pcWeatherApiSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">予報APIキーを保存して再取得</button>' +
-      '<button type="button" id="pcWeatherApiDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">予報APIを無効化</button>' +
+      '<button type="button" id="pcYahooWeatherSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">Client IDを保存して再取得</button>' +
+      '<button type="button" id="pcYahooWeatherDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">Yahoo! APIを無効化</button>' +
       '</div>' +
-      '<p id="pcWeatherApiStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 12px"></p>' +
-      '<p style="font-size:11px;line-height:1.6;margin:0 0 15px"><a href="https://www.weatherapi.com/signup.aspx" target="_blank" rel="noopener noreferrer">WeatherAPI.comの無料登録・キー取得</a> · <a href="https://www.weatherapi.com/docs/forecast-api/" target="_blank" rel="noopener noreferrer">予報APIの仕様</a></p>' +
-      '<div style="padding-top:12px;border-top:1px solid #00000018">' +
-      '<strong style="display:block;font-size:12px;margin-bottom:6px">Yahoo! JAPAN 雨情報API（任意）</strong>' +
-      '<p style="font-size:11.5px;line-height:1.55;margin:0 0 8px">Yahoo!の公式APIは雨の強さの実測値と60分先までの予測に対応します。気温や週間予報は含まれないため、上の予報APIの代わりではなく補助データとして使います。</p>' +
-      '<label for="pcYahooYolpKeyInput" style="display:block;font-size:11.5px;margin-bottom:5px">Yahoo! YOLP Client ID</label>' +
-      '<input id="pcYahooYolpKeyInput" type="password" autocomplete="off" spellcheck="false" placeholder="Yahoo!デベロッパーネットワークのClient ID" style="box-sizing:border-box;width:100%;padding:9px 10px;border:1px solid #0000002b;border-radius:8px;background:#fff;color:#111;font-size:12px">' +
-      '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:8px">' +
-      '<button type="button" id="pcYahooYolpSave" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:#222;color:#fff;font-size:12px;cursor:pointer">Yahoo! Client IDを保存</button>' +
-      '<button type="button" id="pcYahooYolpDisable" style="border:1px solid #00000030;border-radius:8px;padding:7px 10px;background:transparent;color:inherit;font-size:12px;cursor:pointer">Yahoo!雨情報を無効化</button>' +
-      '</div>' +
-      '<p id="pcYahooYolpStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 0"></p>' +
-      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0"><a href="https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html" target="_blank" rel="noopener noreferrer">Yahoo!公式 気象情報APIの説明</a></p>' +
-      '</div>' +
-      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:14px">' +
-      '<a href="https://www.google.com/search?q=%E4%BB%99%E5%8F%B0%E5%B8%82%E5%A4%AA%E7%99%BD%E5%8C%BA+%E5%AF%8C%E6%B2%A2+%E5%A4%A9%E6%B0%97" target="_blank" rel="noopener noreferrer">Googleで天気を見る</a>' +
+      '<p id="pcYahooWeatherStatus" aria-live="polite" style="font-size:11px;line-height:1.5;margin:7px 0 0"></p>' +
+      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0"><a href="https://e.developer.yahoo.co.jp/register" target="_blank" rel="noopener noreferrer">Yahoo!アプリケーション登録・Client ID取得</a> · <a href="https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html" target="_blank" rel="noopener noreferrer">公式API仕様</a></p>' +
+      '<p style="font-size:11px;line-height:1.6;margin:7px 0 0">Yahoo! YOLPの気象情報APIは1アプリケーションあたり1日5万リクエストまで。公開・無料サービス向けの利用条件と、Yahoo!のクレジット表示ルールを確認してください。</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;margin-top:10px">' +
+      '<a href="https://weather.yahoo.co.jp/weather/" target="_blank" rel="noopener noreferrer">Yahoo!天気を開く</a>' +
       '<a href="https://weathernews.jp/" target="_blank" rel="noopener noreferrer">ウェザーニュース</a>' +
-      '<a href="https://weather.yahoo.co.jp/weather/" target="_blank" rel="noopener noreferrer">Yahoo!天気</a>' +
       '</div>';
     host.appendChild(panel);
-
-    function wireKey(storageKey, inputId, statusId, saveId, disableId, label) {
-      const input = panel.querySelector('#' + inputId);
-      const status = panel.querySelector('#' + statusId);
-      const save = panel.querySelector('#' + saveId);
-      const disable = panel.querySelector('#' + disableId);
-      function update(message) { status.textContent = message; status.style.color = '#555'; }
-      const existing = readStoredWeatherKey(storageKey);
-      update(existing ? label + 'は保存済みです（キー自体は表示していません）。' : label + 'は未設定です。');
-      save.addEventListener('click', function () {
-        const value = String(input.value || '').trim();
-        if (!value) { update(label + 'を入力してください。'); return; }
-        try {
-          localStorage.setItem(storageKey, value);
-          input.value = '';
-          update(label + 'をこのブラウザーに保存しました。天気を再取得します。');
-          const refresh = document.querySelector('.clk-weather__refresh-btn');
-          if (refresh) refresh.click();
-        } catch (error) {
-          update('ブラウザーに保存できませんでした。ブラウザーの保存設定を確認してください。');
-        }
-      });
-      disable.addEventListener('click', function () {
-        try { localStorage.removeItem(storageKey); } catch (error) {}
+    const input = panel.querySelector('#pcYahooWeatherClientId');
+    const status = panel.querySelector('#pcYahooWeatherStatus');
+    const save = panel.querySelector('#pcYahooWeatherSave');
+    const disable = panel.querySelector('#pcYahooWeatherDisable');
+    function update(message) { status.textContent = message; status.style.color = '#555'; }
+    update(readYahooYolpKey()
+      ? 'Client IDはこのブラウザーに保存済みです（値は表示していません）。'
+      : '未設定です。Yahoo!デベロッパーネットワークで取得したClient IDを入力してください。');
+    save.addEventListener('click', function () {
+      const value = String(input.value || '').trim();
+      if (!value) { update('Yahoo! YOLP Client IDを入力してください。'); return; }
+      try {
+        localStorage.setItem(YAHOO_YOLP_KEY_STORAGE, value);
         input.value = '';
-        update(label + 'を無効化しました。');
+        update('Client IDをこのブラウザーに保存しました。雨の強さを再取得します。');
         const refresh = document.querySelector('.clk-weather__refresh-btn');
         if (refresh) refresh.click();
-      });
-    }
-    wireKey(WEATHERAPI_KEY_STORAGE, 'pcWeatherApiKeyInput', 'pcWeatherApiStatus',
-      'pcWeatherApiSave', 'pcWeatherApiDisable', 'WeatherAPI.com APIキー');
-    wireKey(YAHOO_YOLP_KEY_STORAGE, 'pcYahooYolpKeyInput', 'pcYahooYolpStatus',
-      'pcYahooYolpSave', 'pcYahooYolpDisable', 'Yahoo! YOLP Client ID');
+      } catch (error) {
+        update('ブラウザーに保存できませんでした。ブラウザーの保存設定を確認してください。');
+      }
+    });
+    disable.addEventListener('click', function () {
+      try { localStorage.removeItem(YAHOO_YOLP_KEY_STORAGE); } catch (error) {}
+      input.value = '';
+      update('Yahoo! APIを無効化しました。');
+      const refresh = document.querySelector('.clk-weather__refresh-btn');
+      if (refresh) refresh.click();
+    });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', installWeatherProviderSettings, { once: true });
+    document.addEventListener('DOMContentLoaded', installYahooWeatherSettings, { once: true });
   } else {
-    installWeatherProviderSettings();
+    installYahooWeatherSettings();
   }
 
   window.__weatherFallback = {
     getJmaForecast: getPreferredForecast,
     getForecast: getPreferredForecast,
     isValidForecast: isValidForecast,
-    hasWeatherApiKey: function () { return Boolean(readStoredWeatherKey(WEATHERAPI_KEY_STORAGE)); },
-    hasYahooRainfallKey: function () { return Boolean(readStoredWeatherKey(YAHOO_YOLP_KEY_STORAGE)); }
+    hasYahooRainfallKey: function () { return Boolean(readYahooYolpKey()); }
   };
 
   // Keep the stopwatch history list independently scrollable.
