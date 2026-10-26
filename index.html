@@ -341,7 +341,7 @@ function tmShow(){
  $('.clk-timer-circle__label',c).textContent=label;$('.clk-timer-circle__time',c).textContent=time;c.setAttribute('aria-label',label+' '+time);
  pause.setAttribute('aria-label',x.run?'停止':(x.done?'已終了':'再開'));pause.title=x.run?'停止':(x.done?'已終了':'再開');pause.innerHTML=ic(x.run?PAUSE:PLAY);pause.disabled=!!x.done;pause.setAttribute('aria-disabled',String(!!x.done));
  reset.disabled=x.left===x.tot&&!x.run&&!x.done;reset.setAttribute('aria-disabled',String(reset.disabled));finish.disabled=false;finish.textContent=x.done?'終了':'終了';
- progress.style.strokeDasharray=total;progress.style.strokeDashoffset=total*(1-Math.max(0,Math.min(1,x.left/Math.max(1,x.tot))));
+ progress.style.strokeDasharray=total;progress.style.strokeDashoffset=total*(1-Math.max(0,Math.min(1,x.left/Math.max(1,x.tot))));c.style.zIndex='20';const timerSvg=$('.clk-timer-circle__svg',c),timerCenter=$('.clk-timer-circle__center',c);if(timerSvg)timerSvg.style.pointerEvents='none';if(timerCenter){timerCenter.style.zIndex='1';timerCenter.style.pointerEvents='auto'}[pause,reset,finish,close].forEach(b=>{if(b){b.style.position='relative';b.style.zIndex='2';b.style.pointerEvents='auto'}});
  close.disabled=false;stA.classList.add('clk-stage--timer-active');$('.clk-date__day',stA).style.display='';$('.clk-date__slot',stA).style.display='';applyTimerLayout()
 }
 function toggleTimer(t){if(!t)return;if(t.run){stopAl();t.left=Number.isFinite(t.end)?Math.max(0,Math.ceil((t.end-Date.now())/1000)):Math.max(0,Number(t.left)||0);t.run=0;t.end=0;tmArmed.delete(t.id)}else{if(!t.left)t.left=t.tot;t.run=1;t.end=Date.now()+t.left*1000;tmArmed.add(t.id)}rt()}
