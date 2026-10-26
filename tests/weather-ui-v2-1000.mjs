@@ -87,12 +87,12 @@ try{
     return { night, white, manual, ivory };
   });
   assert.ok(themeStates.night.active, 'non-default palette should activate');
-  assert.match(themeStates.night.bg, /15,\\s*23,\\s*42|#0F172A/i, 'midnight palette background should apply');
-  assert.match(themeStates.night.fg, /241,\\s*245,\\s*249|#F1F5F9/i, 'midnight foreground color should match the theme');
-  assert.match(themeStates.white.fg, /0,\\s*0,\\s*0|#000000/i, 'white background should use black text');
-  assert.match(themeStates.manual, /245,\\s*239,\\s*230|#F5EFE6/i, 'manual foreground color should override auto black');
-  assert.match(themeStates.ivory.bg, /248,\\s*244,\\s*236|#F8F4EC/i, 'ivory palette background should apply');
-  assert.match(themeStates.ivory.fg, /31,\\s*41,\\s*55|#1F2937/i, 'ivory palette foreground color should match the theme');
+  assert.match(themeStates.night.bg, /15,\s*23,\s*42|#0F172A/i, 'midnight palette background should apply');
+  assert.match(themeStates.night.fg, /241,\s*245,\s*249|#F1F5F9/i, 'midnight foreground color should match the theme');
+  assert.match(themeStates.white.fg, /0,\s*0,\s*0|#000000/i, 'white background should use black text');
+  assert.match(themeStates.manual, /245,\s*239,\s*230|#F5EFE6/i, 'manual foreground color should override auto black');
+  assert.match(themeStates.ivory.bg, /248,\s*244,\s*236|#F8F4EC/i, 'ivory palette background should apply');
+  assert.match(themeStates.ivory.fg, /31,\s*41,\s*55|#1F2937/i, 'ivory palette foreground color should match the theme');
   await page.locator('button.clk-controls__btn[aria-label="天気"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
   await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[1]?.textContent==='4.0 m/s',{timeout:5000});
   assert.equal(await page.locator('.clk-weather__stat-value').nth(0).innerText(),'61%');
