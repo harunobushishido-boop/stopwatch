@@ -541,7 +541,7 @@ const pm=$('.clk-palette-mini:not(.clk-palette-mini--special)',bgA),ci=document.
 function pal(backgroundColor,foregroundColor,accentColor){
  const bgColor=backgroundColor||'#F4EFE3';
  const brightness=lum(bgColor);
- bgApi.clearMedia();
+ clearMedia();
  shell.style.setProperty('--clk-bg',bgColor);
  shell.style.setProperty('--clk-bg-base',bgColor);
  const accent=accentColor||getComputedStyle(shell).getPropertyValue('--clk-accent').trim()||'#F59E0B';
