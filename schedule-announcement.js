@@ -44,7 +44,7 @@
     if (!record || !record.spreadsheetId || !token) return cachedRows;
     readInFlight = true;
     try {
-      const range = encodeURIComponent("'予定'!A1:E2");
+      const range = encodeURIComponent("'予定'!A1:F2");
       const readSheet = async (spreadsheetId) => {
         const response = await fetch(API + encodeURIComponent(spreadsheetId) + '/values/' + range, {
           headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
