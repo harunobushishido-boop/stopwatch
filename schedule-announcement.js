@@ -10,6 +10,7 @@
   let statusNode = null;
   let timer = null;
   let announcementCheckInFlight = false;
+  let lastTokenRefreshRequestAt = 0;
 
   const todayKey = (date = new Date()) => {
     const y = date.getFullYear();
@@ -38,37 +39,63 @@
   async function readRows(force = false) {
     if (readInFlight) return cachedRows;
     if (!force && Date.now() - lastReadAt < 4000) return cachedRows;
-    const record = recordForCurrentUser();
+    let record = recordForCurrentUser();
     const token = tokenNow();
     if (!record || !record.spreadsheetId || !token) return cachedRows;
     readInFlight = true;
     try {
       const range = encodeURIComponent("'予定'!A1:E2");
-      const response = await fetch(API + encodeURIComponent(record.spreadsheetId) + '/values/' + range, {
-        headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data && data.error && data.error.message || '予定表を読み取れませんでした。');
-      cachedRows = Array.isArray(data.values) ? data.values.slice(1) : [];
+      const readSheet = async (spreadsheetId) => {
+        const response = await fetch(API + encodeURIComponent(spreadsheetId) + '/values/' + range, {
+          headers: { Authorization: 'Bearer ' + token }, cache: 'no-store'
+        });
+        const data = await response.json().catch(() => ({}));
+        return { response, data };
+      };
+      let result = await readSheet(record.spreadsheetId);
+      const errText = String(result.data && result.data.error && result.data.error.message || '');
+      const missingFile = result.response.status === 404 || (/not found|does not exist|requested entity was not found/i.test(errText) && result.response.status !== 401 && result.response.status !== 403);
+      const missingTab = result.response.status === 400 && /unable to parse range|sheet.*not found|no grid with id|unrecognized range/i.test(errText);
+      if (!result.response.ok && (missingFile || missingTab) &&
+          window.PC_SHEETS && typeof window.PC_SHEETS.ensureScheduleSpreadsheet === 'function') {
+        // Repair a deleted spreadsheet or deleted "予定" tab and restore the dropdowns.
+        const oldId = record.spreadsheetId;
+        await window.PC_SHEETS.ensureScheduleSpreadsheet();
+        record = recordForCurrentUser();
+        if (record && record.spreadsheetId) {
+          result = await readSheet(record.spreadsheetId);
+          if (!result.response.ok && record.spreadsheetId === oldId && missingFile) {
+            throw new Error('削除された予定表を自動再作成しましたが、新しい予定表を読み取れませんでした。もう一度確認してください。');
+          }
+        }
+      }
+      if (!result.response.ok) {
+        const message = result.data && result.data.error && result.data.error.message;
+        throw new Error(message || '予定表を読み取れませんでした（HTTP ' + result.response.status + '）。');
+      }
+      cachedRows = Array.isArray(result.data.values) ? result.data.values.slice(1) : [];
       lastReadAt = Date.now();
       return cachedRows;
     } finally { readInFlight = false; }
   }
-  function announcementText(row, classes) {
+  function announcementText(row) {
     const source = Array.isArray(row) ? row : [];
     const kind = String(source[1] || '').trim();
     const specialDetail = String(source[2] || '').trim();
-    const plan = String(source[3] || '').trim();
-    const custom = String(source[4] || '').trim();
-    const details = [];
-    if (specialDetail) details.push(kind === '特別' ? '特別：' + specialDetail : specialDetail);
-    if (plan) details.push(plan);
-    if (custom) details.push(custom);
-    const uniqueDetails = [...new Set(details.filter(Boolean))];
-    const intro = Number.isInteger(classes) && classes >= 1 && classes <= 6
-      ? '今日の予定を発表します。今日は' + classes + '時間授業です。'
-      : '今日の予定を発表します。';
-    return [intro, ...uniqueDetails].filter(Boolean).join('。').replace(/([。！？!?])(?:[。！？!?])+/g, '$1');
+    const rawItems = String(source[3] || '').trim();
+    const additional = String(source[4] || '').trim();
+    const items = [rawItems, kind === '特別' ? specialDetail : ''].filter(Boolean).join('、')
+      .replace(/^明日の持ち物(?:は)?[、,：:\s]*/,'')
+      .replace(/[。．.!！?？]+$/,'')
+      .replace(/です$/,'')
+      .trim();
+    if (!items) return '明日の持ち物が入力されていません。';
+    const mainSentence = '明日の持ち物は、' + items + 'です。';
+    const extra = additional.replace(/^明日の持ち物(?:は)?[、,：:\s]*/,'').trim();
+    const extras = extra && extra !== items && !extra.includes(items) && !/^明日の持ち物/.test(extra)
+      ? [/[。．.!！?？]$/.test(extra) ? extra : extra + '。']
+      : [];
+    return [mainSentence, ...extras].join(' ');
   }
   window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
   // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
@@ -361,8 +388,17 @@
     announcementCheckInFlight = true;
     try {
       const auth = window.PC_AUTH;
-      if (!auth || !auth.currentUser || !tokenNow()) {
-        setStatus('Googleログインすると、今日の予定と授業時間数を発表します。');
+      if (!auth || !auth.currentUser) {
+        setStatus('Googleアカウントに接続すると、明日の持ち物を自動発表します。');
+        return;
+      }
+      if (!tokenNow()) {
+        setStatus('保存済みのGoogle接続を確認しています…');
+        if (typeof window.__pcGoogleRequestAccess === 'function' &&
+            Date.now() - lastTokenRefreshRequestAt > 30000) {
+          lastTokenRefreshRequestAt = Date.now();
+          window.__pcGoogleRequestAccess(true);
+        }
         return;
       }
       const record = recordForCurrentUser();
@@ -373,7 +409,7 @@
       const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
-        setStatus('「予定」シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付は不要です。');
+        setStatus('「予定」シートの2行目に、授業時間数と明日の持ち物を入力してください。');
         return;
       }
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
@@ -410,13 +446,13 @@
         setStatus(classes + '時間授業の発表は本日分を実行済みです。');
         return;
       }
-      const played = await speak(announcementText(row, classes));
+      const played = await speak(announcementText(row));
       if (played) {
         announced[key] = true;
         localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
       }
     } catch (error) {
-      setStatus('今日の予定を読み取れませんでした。Googleログインとアクセス許可を確認してください。', true);
+      setStatus('明日の持ち物を読み取れませんでした。Google接続と予定表を確認してください。', true);
       console.error('Today schedule read failed', error);
     } finally {
       announcementCheckInFlight = false;
@@ -429,12 +465,12 @@
     box.id = 'pcScheduleAnnouncementStatus';
     box.style.cssText = 'margin-top:12px;padding:10px;border:1px solid #15803d55;border-radius:10px;font-size:12px;line-height:1.65';
     const title = document.createElement('strong');
-    title.textContent = '今日の予定・持ち物の音声発表';
+    title.textContent = '明日の持ち物の自動音声発表';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シートは1行目が見出し、2行目だけが今日の予定です。A列=授業時間数、B列=区分（通常/特別）、C列=特別の記入、D列=今日の予定・持ち物、E列=発表文。日付入力は不要で、2行目の内容はすべて今日の予定として発表します。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。ページを開いたままにしてください。';
+    note.textContent = '「予定」シートの2行目に、授業時間数と明日の持ち物を入力します。A列=授業時間数、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ。授業数から自動発表時刻を計算します（5時間=14:25、6時間=15:25）。ページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
     apiHelp.textContent = '高速APIキーを設定すると、音声発表時に高速APIを優先します。キー未設定・無効・ポイント不足・タイムアウト時は、APIキー不要の低速APIへ切り替えます。高速APIは利用ポイントを消費します。声は四国めたん（ノーマル）です。';
