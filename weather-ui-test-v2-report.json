@@ -2,7 +2,7 @@
   "ok": true,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 10864,
+  "elapsed_ms": 8509,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -12,5 +12,5 @@
   },
   "browser_errors": [],
   "failure": null,
-  "timestamp": "2026-10-26T09:27:21.295Z"
+  "timestamp": "2026-10-26T09:37:44.146Z"
 }
