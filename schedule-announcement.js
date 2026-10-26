@@ -498,7 +498,7 @@
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物、必要ならE2で追加のお知らせを入力します。授業時間数は読み上げず、自動発表時刻の計算だけに使います（5時間=14:25、6時間=15:25）。ページを開いたままにしてください。';
+    note.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物、必要ならE2で追加のお知らせを入力します。1〜4時間授業の発表時刻はF2に自分で入力してください。5時間は14:25、6時間は15:15に自動発表します。授業時間数は読み上げません。ページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
     apiHelp.textContent = '高速APIキーを設定すると、音声発表時に高速APIを優先します。キー未設定・無効・ポイント不足・タイムアウト時は、APIキー不要の低速APIへ切り替えます。高速APIは利用ポイントを消費します。声は四国めたん（ノーマル）です。';

@@ -1,18 +1,7 @@
 (function () {
   'use strict';
 
-  // The reference HTML was saved without its linked component CSS. Re-apply the clock
-  // component stylesheet that accompanies mihata.jp/clock; local overrides below/after it remain intact.
-  if (!document.getElementById('pc-reference-clock-css')) {
-    const referenceCss = document.createElement('link');
-    referenceCss.id = 'pc-reference-clock-css';
-    referenceCss.rel = 'stylesheet';
-    referenceCss.href = 'https://mihata.jp/_next/static/css/3zv_yakpu51ie.css';
-    referenceCss.addEventListener('error', function () {
-      console.warn('Reference clock stylesheet could not be loaded; using the embedded clock styles.');
-    }, { once: true });
-    (document.head || document.documentElement).appendChild(referenceCss);
-  }
+  // Reference CSS is loaded in index.html before the local layout overrides.
 
   const FORECAST_CACHE_PREFIX = 'pc-jma-forecast-v1:';
   const OFFICE_CACHE_PREFIX = 'pc-jma-office-v1:';
@@ -545,11 +534,15 @@
 
   function openMeteoWeatherCode(value) {
     const code = Number(value);
-    if ([0, 1].includes(code)) return '100';
-    if (code === 2) return '200';
-    if ([3, 45, 48].includes(code)) return '201';
+    if (code === 0) return '100';
+    if (code === 1) return '101';
+    if (code === 2) return '201';
+    if (code === 3) return '200';
+    if ([45, 48].includes(code)) return '209';
+    if ([51, 53, 55, 56, 57, 61, 63, 66, 67, 80, 81].includes(code)) return '300';
+    if ([65, 82].includes(code)) return '306';
     if ([71, 73, 75, 77, 85, 86].includes(code)) return '400';
-    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return '300';
+    if ([95, 96, 99].includes(code)) return '308';
     return '201';
   }
 
@@ -617,7 +610,7 @@
       wind: numericOrBlank(current && current.wind_speed_10m),
       code: currentCode || (hourlyForecast.timeSeries[0].areas[0].weatherCodes[0] || '')
     };
-    forecast.__currentObserved = true;
+    forecast.__currentObserved = false;
     forecast.__locationName = String(name || '');
     return forecast;
   }
