@@ -94,8 +94,19 @@ try{
   assert.match(themeStates.ivory.bg, /248,\s*244,\s*236|#F8F4EC/i, 'ivory palette background should apply');
   assert.match(themeStates.ivory.fg, /31,\s*41,\s*55|#1F2937/i, 'ivory palette foreground color should match the theme');
   await page.locator('button.clk-controls__btn[aria-label="天気"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
-  await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[1]?.textContent==='4.0 m/s',{timeout:5000});
-  assert.equal(await page.locator('.clk-weather__stat-value').nth(0).innerText(),'61%');
+  const weatherStats = page.locator('.clk-weather__stat-value');
+  await page.waitForFunction(() => {
+    const values = Array.from(document.querySelectorAll('.clk-weather__stat-value')).map(x => x.textContent.trim());
+    return values.length >= 4 && values[0] !== '—%' && values[1] !== '— m/s';
+  }, {timeout:10000});
+  assert.equal((await weatherStats.nth(0).innerText()).trim(),'61%');
+  assert.match((await weatherStats.nth(1).innerText()).trim(),/^4(?:\.0)? m\/s$/);
+  const providerStatus = page.locator('#pcWeatherProviderStatus');
+  await page.locator('#pcWeatherSourcePanel [data-weather-provider="jma"]').click();
+  await page.waitForFunction(() => document.querySelector('.clk-weather__source-note')?.textContent.includes('気象庁'), {timeout:10000});
+  await page.locator('#pcWeatherSourcePanel [data-weather-provider="open-meteo"]').click();
+  await page.waitForFunction(() => document.querySelector('.clk-weather__source-note')?.textContent.includes('Open-Meteo'), {timeout:10000});
+  assert.ok((await providerStatus.innerText()).includes('Open-Meteo'));
   await page.waitForTimeout(10);
 
   const edit=page.locator('.clk-weather__edit-btn');
