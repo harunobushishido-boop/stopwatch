@@ -66,7 +66,7 @@ try{
   // 200 operations: manual weather refresh button.
   for(let i=0;i<200;i++){
     await refresh.click(); completed++; await page.waitForTimeout(1);
-    assert.match((await refresh.innerText()).trim(),/更新したばかり|更新中|分前に更新/,`refresh label failed #${i+1}`);
+    assert.match((await refresh.innerText()).trim(),/更新したばかり|更新中|分前に更新/,`refresh label failed #${i+1}; got: ${(await refresh.innerText()).trim()}`);
   }
 
   // 50 operations: postal-code search + selecting the result.
