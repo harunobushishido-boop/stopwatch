@@ -7,7 +7,53 @@
   const configured = clientId.endsWith('.apps.googleusercontent.com') &&
     !/PASTE_|YOUR_PROJECT|YOUR_CLIENT/i.test(clientId);
 
-  let currentUser = null;
+  const AUTH_PROFILE_CACHE_KEY = 'pc-google-login-profile-v1';
+  const AUTH_PROFILE_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
+
+  function readCachedProfile() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(AUTH_PROFILE_CACHE_KEY) || 'null');
+      if (!cached || !cached.user || !Number.isFinite(Number(cached.savedAt)) ||
+          Date.now() - Number(cached.savedAt) > AUTH_PROFILE_MAX_AGE ||
+          Number(cached.savedAt) > Date.now() + 60000) {
+        localStorage.removeItem(AUTH_PROFILE_CACHE_KEY);
+        return null;
+      }
+      const user = cached.user;
+      if (!user.sub || !user.email) return null;
+      return {
+        sub: String(user.sub),
+        name: String(user.name || ''),
+        email: String(user.email || ''),
+        picture: String(user.picture || ''),
+        emailVerified: user.emailVerified === true,
+        expiresAt: 0,
+        verifiedByServer: false,
+        restoredFromCache: true
+      };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function saveCachedProfile(user) {
+    if (!user || !user.sub || !user.email) return;
+    try {
+      // Store only display/profile details. Never persist OAuth access or ID tokens.
+      localStorage.setItem(AUTH_PROFILE_CACHE_KEY, JSON.stringify({
+        savedAt: Date.now(),
+        user: {
+          sub: String(user.sub),
+          name: String(user.name || ''),
+          email: String(user.email || ''),
+          picture: String(user.picture || ''),
+          emailVerified: user.emailVerified === true
+        }
+      }));
+    } catch (error) {}
+  }
+
+  let currentUser = readCachedProfile();
   let googleIdTokenSeen = false;
   let accessToken = '';
   let accessTokenExpiresAt = 0;
@@ -51,8 +97,12 @@
     return JSON.parse(new TextDecoder().decode(bytes));
   }
 
-  function publishState(user) {
+  function publishState(user, options = {}) {
     currentUser = user || null;
+    if (currentUser && options.persist !== false) saveCachedProfile(currentUser);
+    if (!currentUser && options.clearCache) {
+      try { localStorage.removeItem(AUTH_PROFILE_CACHE_KEY); } catch (error) {}
+    }
     if (profileNode) {
       profileNode.replaceChildren();
       if (currentUser) {
@@ -98,7 +148,7 @@
         accessTokenExpiresAt = 0;
         try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
         try { window.google?.accounts?.id?.cancel(); } catch (error) {}
-        publishState(null);
+        publishState(null, { clearCache: true });
       }
     };
 
@@ -171,7 +221,7 @@
       if (!container.isConnected) return;
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+      button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
       button.style.cssText = 'padding:10px 14px;border:1px solid #4285f4;border-radius:9px;background:#4285f4;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer';
       button.addEventListener('click', () => {
         setError('');
@@ -213,19 +263,19 @@
                 setStatus('ログインに失敗しました', true);
               } finally {
                 button.disabled = false;
-                button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+                button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
               }
             },
             error_callback: (error) => {
               button.disabled = false;
-              button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+              button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
               setError(error && error.message || 'Googleの認証画面を開けませんでした。');
             }
           });
           tokenClient.requestAccessToken({ prompt: 'consent' });
         } catch (error) {
           button.disabled = false;
-          button.textContent = 'Googleアカウントでログインしてアクセスを許可';
+          button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
           setError(error.message || 'Google認証を開始できませんでした。');
         }
       });
@@ -278,7 +328,8 @@
     group.append(title, note, statusNode, profileNode, errorNode, container, signOutButton, guideRow, note2);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
-    publishState(null);
+    // Restore the remembered account label, without pretending the short-lived API token survived.
+    publishState(currentUser, { persist: false });
 
     if (!configured) {
       setError('Google CloudでOAuth 2.0のウェブアプリ クライアントIDを作成し、google-login-config.jsに設定してください。');
@@ -299,7 +350,7 @@
       accessToken = '';
       accessTokenExpiresAt = 0;
       try { window.google?.accounts?.id?.disableAutoSelect(); } catch (error) {}
-      publishState(null);
+      publishState(null, { clearCache: true });
     }
   };
 
