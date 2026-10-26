@@ -1,6 +1,157 @@
 (function () {
   'use strict';
 
+  // The reference HTML was saved without its linked component CSS. Re-apply the clock
+  // component stylesheet that accompanies mihata.jp/clock; local overrides below/after it remain intact.
+  if (!document.getElementById('pc-reference-clock-css')) {
+    const referenceCss = document.createElement('link');
+    referenceCss.id = 'pc-reference-clock-css';
+    referenceCss.rel = 'stylesheet';
+    referenceCss.href = 'https://mihata.jp/_next/static/css/3zv_yakpu51ie.css';
+    referenceCss.addEventListener('error', function () {
+      console.warn('Reference clock stylesheet could not be loaded; using the embedded clock styles.');
+    }, { once: true });
+    (document.head || document.documentElement).appendChild(referenceCss);
+  }
+
+  const YAHOO_CLIENT_ID_KEY = 'pc-yahoo-weather-client-id-v1';
+  function readYahooClientId() {
+    try { return String(localStorage.getItem(YAHOO_CLIENT_ID_KEY) || '').trim(); }
+    catch (error) { return ''; }
+  }
+
+  function yahooJsonp(url, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      const callbackName = '__pcYahooWeatherCallback_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+      let timer = null;
+      let settled = false;
+      const cleanup = function () {
+        if (timer) clearTimeout(timer);
+        try { delete window[callbackName]; } catch (error) { window[callbackName] = undefined; }
+        script.remove();
+      };
+      const finish = function (error, data) {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        if (error) reject(error);
+        else resolve(data);
+      };
+      window[callbackName] = function (data) { finish(null, data); };
+      script.async = true;
+      script.onerror = function () { finish(new Error('Yahoo! JAPAN気象情報APIに接続できませんでした。')); };
+      const requestUrl = new URL(url);
+      requestUrl.searchParams.set('output', 'json');
+      requestUrl.searchParams.set('callback', callbackName);
+      script.src = requestUrl.toString();
+      timer = setTimeout(function () {
+        finish(new Error('Yahoo! JAPAN気象情報APIが時間内に応答しませんでした。'));
+      }, timeoutMs || 6000);
+      (document.head || document.documentElement).appendChild(script);
+    });
+  }
+
+  function yahooDate(value) {
+    const stamp = String(value || '');
+    if (!/^\\d{12}$/.test(stamp)) return NaN;
+    return Date.parse(stamp.slice(0, 4) + '-' + stamp.slice(4, 6) + '-' + stamp.slice(6, 8) +
+      'T' + stamp.slice(8, 10) + ':' + stamp.slice(10, 12) + ':00+09:00');
+  }
+
+  async function getYahooRainfall(lat, lon) {
+    const clientId = readYahooClientId();
+    if (!clientId) throw new Error('Yahoo! Client ID未設定');
+    const url = new URL('https://map.yahooapis.jp/weather/V1/place');
+    // Yahoo! 気象情報API expects longitude,latitude in that order.
+    url.searchParams.set('coordinates', Number(lon) + ',' + Number(lat));
+    url.searchParams.set('appid', clientId);
+    const payload = await yahooJsonp(url.toString(), 6000);
+    const ydf = payload && (payload.YDF || payload);
+    const status = ydf && ydf.ResultInfo && Number(ydf.ResultInfo.Status);
+    if (status && status !== 200) throw new Error('Yahoo! JAPAN気象情報APIの応答コード: ' + status);
+    const features = Array.isArray(ydf && ydf.Feature) ? ydf.Feature : (ydf && ydf.Feature ? [ydf.Feature] : []);
+    const prop = features[0] && features[0].Property;
+    const list = prop && prop.WeatherList && prop.WeatherList.Weather;
+    const rows = Array.isArray(list) ? list : (list ? [list] : []);
+    const valid = rows.map(function (item) {
+      return {
+        type: String(item && item.Type || '').toLowerCase(),
+        date: String(item && item.Date || ''),
+        time: yahooDate(item && item.Date),
+        rainfall: item && item.Rainfall !== '' && item.Rainfall !== null && item.Rainfall !== undefined && Number.isFinite(Number(item.Rainfall)) ? Number(item.Rainfall) : null
+      };
+    }).filter(function (item) { return item.time === item.time && item.rainfall !== null; });
+    if (!valid.length) throw new Error('Yahoo! JAPANから有効な雨の強さデータが返されませんでした。');
+    const observations = valid.filter(function (item) { return item.type === 'observation'; })
+      .sort(function (a, b) { return a.time - b.time; });
+    const forecasts = valid.filter(function (item) { return item.type === 'forecast' && item.time >= Date.now() - 10 * 60 * 1000; })
+      .sort(function (a, b) { return a.time - b.time; });
+    const current = observations[observations.length - 1] || null;
+    const target = Date.now() + 60 * 60 * 1000;
+    const next = forecasts.length ? forecasts.reduce(function (best, item) {
+      return !best || Math.abs(item.time - target) < Math.abs(best.time - target) ? item : best;
+    }, null) : null;
+    return {
+      current: current ? current.rainfall : (forecasts[0] ? forecasts[0].rainfall : null),
+      nextHour: next ? next.rainfall : null,
+      updatedAt: current ? current.date : '',
+      forecastAt: next ? next.date : ''
+    };
+  }
+
+  function installYahooClientIdEditor() {
+    const panel = document.getElementById('pcYahooRainPanel');
+    if (!panel || document.getElementById('pcYahooClientIdEditor')) return;
+    const box = document.createElement('div');
+    box.id = 'pcYahooClientIdEditor';
+    box.style.cssText = 'display:flex;flex-direction:column;gap:7px;margin-top:12px;padding-top:10px;border-top:1px solid rgba(127,127,127,.2)';
+    const label = document.createElement('label');
+    label.htmlFor = 'pcYahooClientIdInput';
+    label.textContent = 'Yahoo! JAPAN Client ID';
+    label.style.cssText = 'font-size:12px;font-weight:600';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:stretch;flex-wrap:wrap';
+    const input = document.createElement('input');
+    input.id = 'pcYahooClientIdInput';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'Client IDを入力';
+    input.value = readYahooClientId();
+    input.style.cssText = 'min-width:0;flex:1;width:220px;padding:9px 10px;border:1px solid rgba(127,127,127,.4);border-radius:9px;background:var(--clk-bg,#fff);color:var(--clk-fg,#222);font:inherit;font-size:12px';
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.textContent = '保存して取得';
+    save.style.cssText = 'padding:9px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer';
+    const note = document.createElement('p');
+    note.id = 'pcYahooClientIdNote';
+    note.style.cssText = 'margin:0;font-size:11px;line-height:1.55;opacity:.75';
+    note.textContent = 'Client IDはこのブラウザー内に保存されます。未設定でも気象庁の天気予報は利用できます。';
+    const link = document.createElement('a');
+    link.href = 'https://developer.yahoo.co.jp/webapi/map/openlocalplatform/v1/weather.html';
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Yahoo! JAPAN 気象情報APIの説明';
+    link.style.cssText = 'font-size:11px;color:inherit;opacity:.8;text-decoration:underline;align-self:flex-start';
+    save.addEventListener('click', function () {
+      const value = input.value.trim();
+      try {
+        if (value) localStorage.setItem(YAHOO_CLIENT_ID_KEY, value);
+        else localStorage.removeItem(YAHOO_CLIENT_ID_KEY);
+      } catch (error) {
+        note.textContent = 'ブラウザーに保存できませんでした。プライベートモードなどの設定を確認してください。';
+        return;
+      }
+      note.textContent = value ? 'Client IDを保存しました。雨の強さ情報を再取得します。' : 'Client IDを削除しました。気象庁の予報を使用します。';
+      const refresh = document.querySelector('.clk-weather__refresh-btn');
+      if (refresh) refresh.click();
+    });
+    row.append(input, save);
+    box.append(label, row, note, link);
+    panel.appendChild(box);
+  }
+
   const FORECAST_CACHE_PREFIX = 'pc-jma-forecast-v1:';
   const OFFICE_CACHE_PREFIX = 'pc-jma-office-v1:';
   const CACHE_FRESH_MS = 30 * 60 * 1000;
@@ -423,7 +574,7 @@
       daily.some(function (ts) { return Array.isArray(ts.timeDefines) && ts.areas && ts.areas.some(function (area) { return Array.isArray(area.weatherCodes); }); });
   }
 
-  async function getJmaForecast(lat, lon, name) {
+  async function getJmaForecastBase(lat, lon, name) {
     const latitude = Number(lat);
     const longitude = Number(lon);
     if (!isValidJapanCoordinate(latitude, longitude)) {
@@ -465,7 +616,25 @@
   }
 
 
-  // Weather uses only Japan Meteorological Agency feeds.
+  // JMA remains the forecast fallback. Yahoo! is used for its rain-intensity nowcast
+  // when a Client ID has been configured; a Yahoo failure must never hide the JMA forecast.
+  async function getJmaForecast(lat, lon, name) {
+    const basePromise = getJmaForecastBase(lat, lon, name);
+    const yahooPromise = getYahooRainfall(lat, lon).then(
+      function (rainfall) { return { rainfall: rainfall, error: null }; },
+      function (error) { return { rainfall: null, error: error }; }
+    );
+    const forecast = await basePromise;
+    const yahoo = await yahooPromise;
+    forecast.__yahooRainfall = yahoo.rainfall;
+    forecast.__yahooStatus = yahoo.rainfall ? '' : String(yahoo.error && yahoo.error.message || 'Yahoo!の雨情報を取得できませんでした。');
+    if (yahoo.error && readYahooClientId()) console.warn('Yahoo! rainfall unavailable; showing JMA forecast:', yahoo.error);
+    return forecast;
+  }
+
+  installYahooClientIdEditor();
+
+  // Weather sources: JMA hourly/daily forecasts and optional Yahoo! rainfall nowcast.
   window.__weatherFallback = {
     getJmaForecast: getJmaForecast,
     getForecast: getJmaForecast,
