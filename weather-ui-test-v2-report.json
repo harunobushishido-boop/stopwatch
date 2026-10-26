@@ -1,9 +1,9 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 1000,
-  "elapsed_ms": 9813,
-  "forecast_requests": 293,
+  "completed_operations": 0,
+  "elapsed_ms": 30012,
+  "forecast_requests": 0,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
@@ -11,6 +11,6 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": null,
-  "timestamp": "2026-10-26T07:10:38.893Z"
+  "failure": "page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:4173/index.html?weather-test=v2\", waiting until \"domcontentloaded\"\n\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:43:14",
+  "timestamp": "2026-10-26T07:20:44.529Z"
 }
