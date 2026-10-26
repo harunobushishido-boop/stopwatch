@@ -21,11 +21,7 @@
       }
       button.disabled = true;
       button.textContent = '再生中…';
-      let hasFastKey = false;
-      try { hasFastKey = Boolean(String(localStorage.getItem('pc-voicevox-fast-api-key-v1') || '').trim()); } catch (error) {}
-      message.textContent = hasFastKey
-        ? 'WEB版VOICEVOX 高速API（四国めたん）を準備しています…'
-        : 'WEB版VOICEVOX API（低速・四国めたん）を準備しています…';
+      message.textContent = 'WEB版VOICEVOX API（四国めたん・ノーマル）を準備しています…';
       try {
         await speak(TEXT);
         const status = document.getElementById('pcScheduleAnnouncementStatus');
@@ -41,8 +37,8 @@
     });
     host.append(button, message);
   }
-  // schedule-announcement.js installs its status panel before DOMContentLoaded.
-  // Install once instead of observing every change in the entire page.
+  const observer = new MutationObserver(install);
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
   else install();
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
