@@ -489,8 +489,19 @@
   }
 
   function installWeatherSourcePicker() {
-    const panel = document.getElementById('pcWeatherSourcePanel') || document.getElementById('pcYahooRainPanel');
-    if (!panel || panel.dataset.providerPickerReady === '1') return;
+    let panel = document.getElementById('pcWeatherSourcePanel') || document.getElementById('pcYahooRainPanel');
+    if (!panel) {
+      panel = document.createElement('section');
+      panel.id = 'pcWeatherSourcePanel';
+      panel.style.cssText = 'margin:10px 0 14px;padding:12px 14px;border:1px solid rgba(80,90,75,.18);border-radius:14px;background:rgba(128,128,128,.05)';
+      const note = document.querySelector('.clk-weather__source-note');
+      if (note && note.parentElement) note.parentElement.insertBefore(panel, note);
+      else {
+        const weather = document.querySelector('.clk-weather');
+        if (weather) weather.appendChild(panel);
+      }
+    }
+    if (panel.dataset.providerPickerReady === '1') return;
     panel.id = 'pcWeatherSourcePanel';
     panel.setAttribute('aria-label', '天気情報の取得元');
     panel.dataset.providerPickerReady = '1';
@@ -499,7 +510,7 @@
         '<strong style="font-size:12.5px">天気予報の取得元</strong>' +
         '<span id="pcWeatherProviderStatus" aria-live="polite" style="font-size:11px;opacity:.78">Open-Meteoを優先</span>' +
       '</div>' +
-      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">Open-Meteoと気象庁を切り替えられます。選んだAPIで取得できない場合は、もう一方のAPIに自動で切り替えます。</p>' +
+      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">Open-Meteoと気象庁を切り替えられます。選んだAPIで取得できない場合は、もう一方のAPIへ自動で切り替えます。</p>' +
       '<div id="pcWeatherProviderOptions" style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button type="button" data-weather-provider="open-meteo" aria-pressed="true" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">Open-Meteo</button>' +
         '<button type="button" data-weather-provider="jma" aria-pressed="false" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">気象庁</button>' +
@@ -512,7 +523,7 @@
         const active = button.dataset.weatherProvider === provider;
         button.setAttribute('aria-pressed', String(active));
         button.style.background = active ? 'var(--clk-accent, #4A6FA5)' : 'transparent';
-        button.style.color = active ? 'var(--clk-bg, #fff)' : 'var(--clk-fg, inherit)';
+        button.style.color = active ? '#fff' : 'var(--clk-fg, #222)';
         button.style.borderColor = active ? 'var(--clk-accent, #4A6FA5)' : 'currentColor';
       });
       if (status) status.textContent = provider === 'jma' ? '気象庁を優先' : 'Open-Meteoを優先';
@@ -528,7 +539,7 @@
     updateButtons();
     const note = document.querySelector('.clk-weather__source-note');
     if (note) {
-      note.textContent = '天気予報はOpen-Meteoまたは気象庁から取得します。選んだ取得元で接続できない場合は、もう一方に自動で切り替えます。富沢小学校の初期座標を使い、予報は学校敷地そのものの観測値ではありません。';
+      note.textContent = '天気予報はOpen-Meteoまたは気象庁から取得します。選択した取得元で接続できない場合は、もう一方に自動で切り替えます。富沢小学校の初期座標を使用しますが、予報は学校敷地そのものの観測値ではありません。';
     }
   }
 
