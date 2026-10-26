@@ -25,7 +25,7 @@
       try {
         await speak(TEXT);
         const status = document.getElementById('pcScheduleAnnouncementStatus');
-        const detail = status ? status.innerText.replace(/^授業時間数に合わせた音声発表\s*/, '').trim() : '';
+        const detail = status ? status.innerText.replace(/^明日の持ち物の自動音声発表\s*/, '').trim() : '';
         message.textContent = '音声テストが終わりました。' + (detail ? ' ' + detail : '');
       } catch (error) {
         message.textContent = '音声を再生できませんでした。API接続と音量を確認してください。';
