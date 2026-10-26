@@ -204,7 +204,7 @@
 
     try {
       await ensureScheduleSpreadsheetLayout(record, token);
-      const range = escapeSheetName('予定') + '!A1:E2';
+      const range = escapeSheetName('予定') + '!A1:F2';
       const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
       const values = Array.isArray(data.values) ? data.values : [];
       const visibleRows = values.filter(row => (row || []).some(cell => String(cell == null ? '' : cell).trim()));
