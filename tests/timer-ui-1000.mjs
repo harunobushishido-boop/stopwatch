@@ -41,29 +41,20 @@ try{
   assert.equal(await preset.count(),1);
 
   for(let cycle=1;cycle<=200;cycle++){
+    // Reopen Settings for the preset, then close it before clicking the main timer.
+    // The backdrop intentionally blocks clicks to the page behind an open panel.
+    if(cycle>1) await page.locator('button.clk-controls__btn[aria-label="タイマー"]').click({force:true});
+
     // create
     await preset.click({force:true});completed++;
     const circle=page.locator('.clk-timer-circle');
     await circle.waitFor({state:'visible',timeout:2000});
+    await page.locator('.clk-panel__close').click({force:true});
 
     // stop
     const stop=page.locator('.clk-timer-circle__pause');
-    const timerDiag=()=>page.evaluate(()=>{
-      const b=document.querySelector('.clk-timer-circle__pause');
-      const c=b&&b.closest('.clk-timer-circle');
-      const r=b&&b.getBoundingClientRect();
-      const x=r&&document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
-      let stored=null;try{stored=JSON.parse(localStorage.getItem('pctm')||'null')}catch{}
-      return {label:b&&b.getAttribute('aria-label'),disabled:b&&b.disabled,connected:b&&b.isConnected,
-        rect:r&&{x:r.x,y:r.y,width:r.width,height:r.height},pointerEvents:b&&getComputedStyle(b).pointerEvents,
-        target:x&&x.outerHTML.slice(0,180),hitButton:!!(b&&x&&(b===x||b.contains(x))),
-        timerId:c&&c.dataset.timerId,stored:stored&&stored.tms&&stored.tms.map(t=>({id:t.id,run:t.run,left:t.left,done:t.done})),
-        api:typeof window.__clkTimerApi, setRunning:typeof window.__clkTimerApi?.setRunning};
-    });
-    if(cycle===1)console.log('TIMER_DIAG_BEFORE',JSON.stringify(await timerDiag()));
     if((await stop.getAttribute('aria-label'))!=='再開')await stop.click({force:true});
     completed++;
-    if(cycle===1)console.log('TIMER_DIAG_AFTER',JSON.stringify(await timerDiag()));
     assert.equal((await stop.getAttribute('aria-label')),'再開',`stop/pause state failed #${cycle}`);
 
     // reset
@@ -80,7 +71,6 @@ try{
     await close.click({force:true});completed++;
     await circle.waitFor({state:'detached',timeout:2000});
   }
-
   assert.equal(errors.length,0,`unexpected browser errors: ${errors.join(' | ')}`);
   assert.equal(completed,1000);
 }catch(e){failure=String(e?.stack||e)}
