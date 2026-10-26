@@ -75,6 +75,12 @@
   // speaker=2 は VOICEVOX:四国めたん（ノーマル）。
   const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
   const TTS_QUEST_SPEAKER = 2;
+  const TTS_FAST_API = 'https://deprecatedapis.tts.quest/v2/voicevox/audio/';
+  const TTS_FAST_KEY_STORAGE = 'pc-voicevox-fast-api-key-v1';
+  const getFastApiKey = () => {
+    try { return String(localStorage.getItem(TTS_FAST_KEY_STORAGE) || '').trim(); }
+    catch (error) { return ''; }
+  };
   const voicevoxQuestPreparedAudio = new Map();
   const VOICEVOX_AUDIO_URL_CACHE_MS = 10 * 60 * 1000;
   let voicevoxQuestNextRequestAt = 0;
@@ -193,6 +199,56 @@
     await playAudioUrl(audioUrl);
     return true;
   }
+  async function speakWithFastVoicevox(text) {
+    const key = getFastApiKey();
+    if (!key) throw new Error('高速APIキーがまだ設定されていません。');
+    const phrase = String(text || '').trim();
+    if (!phrase) throw new Error('読み上げる文章が空です。');
+    const params = new URLSearchParams({
+      key,
+      text: phrase,
+      speaker: String(TTS_QUEST_SPEAKER),
+      pitch: '0',
+      intonationScale: '1',
+      speed: '1'
+    });
+    let response;
+    try {
+      response = await fetch(TTS_FAST_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: params.toString(),
+        cache: 'no-store'
+      });
+    } catch (error) {
+      throw new Error('高速VOICEVOX APIに接続できません。ネット接続とAPI側の状態を確認してください。');
+    }
+    const blob = await response.blob();
+    const contentType = String(response.headers.get('content-type') || blob.type || '').toLowerCase();
+    const preview = await blob.slice(0, 300).text().catch(() => '');
+    if (!response.ok || /invalidApiKey/i.test(preview)) {
+      throw new Error(/invalidApiKey/i.test(preview)
+        ? '高速APIキーが正しくありません。APIキーを確認してください。'
+        : /notEnoughPoints/i.test(preview)
+          ? '高速APIの残りポイントが不足しています。低速APIに切り替えます。'
+          : '高速VOICEVOX APIが失敗しました（HTTP ' + response.status + '）。低速APIを試します。');
+    }
+    if (/notEnoughPoints/i.test(preview)) {
+      throw new Error('高速APIの残りポイントが不足しています。低速APIに切り替えます。');
+    }
+    if (/failed/i.test(preview) && !contentType.startsWith('audio/')) {
+      throw new Error('高速VOICEVOX APIで音声合成に失敗しました。低速APIを試します。');
+    }
+    const signature = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+    const hasRiff = signature.length >= 4 && String.fromCharCode(...signature.slice(0, 4)) === 'RIFF';
+    const hasId3 = signature.length >= 3 && String.fromCharCode(...signature.slice(0, 3)) === 'ID3';
+    const hasMpegFrame = signature.length >= 2 && signature[0] === 0xff && (signature[1] & 0xe0) === 0xe0;
+    if (!blob.size || (!contentType.startsWith('audio/') && !hasRiff && !hasId3 && !hasMpegFrame)) {
+      throw new Error(preview.slice(0, 180) || '高速APIから音声ファイルが返されませんでした。低速APIを試します。');
+    }
+    await playBlob(blob);
+    return true;
+  }
   async function speakWithLocalVoicevox(text) {
     const queryUrl = VOICEVOX_LOCAL_BASE + '/audio_query?text=' + encodeURIComponent(text) + '&speaker=2';
     const queryResponse = await fetch(queryUrl, { method: 'POST', mode: 'cors' });
@@ -221,9 +277,21 @@
     });
   }
   async function speak(text) {
+    if (getFastApiKey()) {
+      try {
+        await speakWithFastVoicevox(text);
+        setStatus('WEB版VOICEVOX 高速API（四国めたん）で発表しました。');
+        return true;
+      } catch (error) {
+        console.warn('Fast VOICEVOX API unavailable; falling back to keyless API.', error);
+        setStatus('高速APIで合成できなかったため、低速APIを試しています。', true);
+      }
+    } else {
+      setStatus('高速APIキー未設定のため、低速APIで読み上げます。');
+    }
     try {
       await speakWithVoicevoxQuest(text);
-      setStatus('WEB版VOICEVOX API（四国めたん・ノーマル）で発表しました。');
+      setStatus('WEB版VOICEVOX API（低速・四国めたん）で発表しました。');
       return true;
     } catch (error) {
       console.warn('TTS Quest VOICEVOX unavailable; trying local/browser voice', error);
@@ -285,7 +353,7 @@
       const key = todayKey() + ':' + classes + ':' + target;
 
       if (nowMinutes < targetMinutes) {
-        if (targetMinutes - nowMinutes <= 2) {
+        if (!getFastApiKey() && targetMinutes - nowMinutes <= 2) {
           prepareVoicevoxQuestAudio(announcementText(row, classes)).catch(error =>
             console.warn('TTS pre-generation failed; speech will fall back at announcement time', error));
         }
@@ -330,16 +398,60 @@
     note.textContent = '「予定」シートは1行目が見出し、2行目だけが今日の予定です。A列=授業時間数、B列=区分（通常/特別）、C列=特別の記入、D列=今日の予定・持ち物、E列=発表文。日付入力は不要で、2行目の内容はすべて今日の予定として発表します。授業時間数に合わせて発表時刻を自動計算します（5時間=14:25、6時間=15:25を基準）。ページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
-    apiHelp.append('音声には、住所・電話番号・APIキー登録が不要な無料のWEB版VOICEVOX APIを使います。声は四国めたん（ノーマル）です。無料APIのため、混雑時は合成に時間がかかったり、再試行まで待ち時間が発生することがあります。 ');
+    apiHelp.append('高速APIキーを設定すると、WEB版VOICEVOXの高速合成を優先します。キーが未設定、無効、またはポイント不足の場合はAPIキー不要の低速版へ切り替えます。声は四国めたん（ノーマル）です。');
     const apiLink = document.createElement('a');
-    apiLink.href = 'https://voicevox.su-shiki.com/su-shikiapis/ttsquest/';
+    apiLink.href = 'https://voicevox.su-shiki.com/su-shikiapis/';
     apiLink.target = '_blank';
     apiLink.rel = 'noopener noreferrer';
-    apiLink.textContent = 'APIの説明';
+    apiLink.textContent = '高速APIの説明';
     apiLink.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:3px';
-    apiHelp.append(apiLink);
-    try { localStorage.removeItem('pc-tts-ai-api-key-v1'); } catch (error) {}
-    box.append(title, statusNode, note, apiHelp);
+    const keyLink = document.createElement('a');
+    keyLink.href = 'https://su-shiki.com/api/';
+    keyLink.target = '_blank';
+    keyLink.rel = 'noopener noreferrer';
+    keyLink.textContent = '高速APIキーを取得';
+    keyLink.style.cssText = 'color:inherit;text-decoration:underline;text-underline-offset:3px;margin-left:10px';
+    const keyLabel = document.createElement('label');
+    keyLabel.style.cssText = 'display:block;margin-top:10px;font-weight:600';
+    keyLabel.textContent = '高速APIキー（このブラウザー内に保存）';
+    const keyInput = document.createElement('input');
+    keyInput.type = 'password';
+    keyInput.autocomplete = 'off';
+    keyInput.spellcheck = false;
+    keyInput.placeholder = 'APIキーを貼り付け';
+    keyInput.value = getFastApiKey();
+    keyInput.style.cssText = 'display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:8px 10px;border:1px solid var(--clk-border,rgba(127,127,127,.35));border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px';
+    const keyActions = document.createElement('div');
+    keyActions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:7px';
+    const saveKeyButton = document.createElement('button');
+    saveKeyButton.type = 'button';
+    saveKeyButton.textContent = '高速APIキーを保存';
+    saveKeyButton.style.cssText = 'padding:7px 10px;border:1px solid #15803d;border-radius:8px;background:#15803d;color:#fff;font:inherit;font-size:12px;font-weight:600;cursor:pointer';
+    const clearKeyButton = document.createElement('button');
+    clearKeyButton.type = 'button';
+    clearKeyButton.textContent = 'キーを削除';
+    clearKeyButton.style.cssText = 'padding:7px 10px;border:1px solid currentColor;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer';
+    const keyStatus = document.createElement('p');
+    keyStatus.style.cssText = 'margin:6px 0 0;font-size:11px;opacity:.75';
+    keyStatus.setAttribute('aria-live', 'polite');
+    const persistKey = () => {
+      const value = String(keyInput.value || '').trim();
+      try {
+        if (value) localStorage.setItem(TTS_FAST_KEY_STORAGE, value);
+        else localStorage.removeItem(TTS_FAST_KEY_STORAGE);
+        keyStatus.textContent = value
+          ? '高速APIキーをこのブラウザーに保存しました。GitHubには保存していません。'
+          : '高速APIキーを削除しました。次回は低速APIを使います。';
+      } catch (error) {
+        keyStatus.textContent = 'ブラウザーの保存領域に保存できませんでした。';
+      }
+    };
+    saveKeyButton.addEventListener('click', persistKey);
+    clearKeyButton.addEventListener('click', () => { keyInput.value = ''; persistKey(); });
+    if (getFastApiKey()) keyStatus.textContent = '高速APIキーを保存済みです。音声発表時に高速APIを優先します。';
+    keyActions.append(saveKeyButton, clearKeyButton);
+    keyLabel.appendChild(keyInput);
+    box.append(title, statusNode, note, apiHelp, apiLink, document.createTextNode(' '), keyLink, keyLabel, keyActions, keyStatus);
     host.appendChild(box);
   }
   function start() {
