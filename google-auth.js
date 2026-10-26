@@ -124,7 +124,7 @@
         email.style.cssText = 'font-size:12px;opacity:.75;overflow-wrap:anywhere';
         details.append(name, email);
         profileNode.appendChild(details);
-        setStatus(accessToken && Date.now() < accessTokenExpiresAt ? 'Googleログイン済み・スプレッドシートへのアクセス許可済み' : 'Googleログイン中。アクセス許可を再取得してください。');
+        setStatus(accessToken && Date.now() < accessTokenExpiresAt ? 'Google接続済み・スプレッドシートを利用できます' : 'Googleアカウントは保存済みです。接続状態を自動確認しています。');
         if (signOutButton) signOutButton.hidden = false;
       } else {
         setStatus(configured ? 'Googleアカウントにログインしていません' : '初期設定が必要です');
@@ -313,6 +313,7 @@
         }
       });
       window.__pcGoogleRequestAccess = requestGoogleAccess;
+      window.__pcGoogleAccessIsPending = () => tokenRequestActive;
       button.addEventListener('click', () => {
         setError('');
         if (tokenRequestActive) return;
