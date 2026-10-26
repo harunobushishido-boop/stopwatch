@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 31988,
+  "elapsed_ms": 31538,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -11,6 +11,6 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:97:14",
-  "timestamp": "2026-10-26T22:50:39.923Z"
+  "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:98:14",
+  "timestamp": "2026-10-26T22:54:19.421Z"
 }
