@@ -443,6 +443,35 @@
     return data;
   }
 
+  async function findExistingScheduleSpreadsheet(token) {
+    const escapeQuery = value => String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    const query = "trashed = false and mimeType = 'application/vnd.google-apps.spreadsheet' and name = '" +
+      escapeQuery(SCHEDULE_SPREADSHEET_TITLE) + "'";
+    const params = new URLSearchParams({
+      q: query,
+      pageSize: '100',
+      orderBy: 'modifiedTime desc',
+      fields: 'files(id,name,webViewLink,createdTime,modifiedTime,mimeType)'
+    });
+    try {
+      const data = await scheduleApiJson('https://www.googleapis.com/drive/v3/files?' + params.toString(), token);
+      const candidates = Array.isArray(data.files) ? data.files.filter(file =>
+        file && file.id && file.name === SCHEDULE_SPREADSHEET_TITLE && file.mimeType === 'application/vnd.google-apps.spreadsheet') : [];
+      if (!candidates.length) return null;
+      const file = candidates[0];
+      return {
+        spreadsheetId: file.id,
+        url: file.webViewLink || ('https://docs.google.com/spreadsheets/d/' + file.id + '/edit'),
+        createdAt: file.createdTime ? Date.parse(file.createdTime) : Date.now(),
+        discoveredByDrive: true
+      };
+    } catch (error) {
+      // Drive listing can be unavailable even when the Sheets API is available.
+      console.warn('Could not search Drive for an existing schedule spreadsheet; continuing with creation.', error);
+      return null;
+    }
+  }
+
   async function autoCreateScheduleSpreadsheet() {
     if (scheduleCreationPromise) return scheduleCreationPromise;
     scheduleCreationPromise = (async () => {
@@ -456,6 +485,10 @@
       tokenExpiresAt = expiry;
 
       let record = scheduleSheetRecord(email);
+      if (!record || !record.spreadsheetId) {
+        record = await findExistingScheduleSpreadsheet(token);
+        if (record) saveScheduleSheetRecord(email, record);
+      }
       if (record && record.spreadsheetId) {
         try {
           const meta = await scheduleApiJson(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '?fields=spreadsheetId,spreadsheetUrl', token);
@@ -475,6 +508,21 @@
           if (error.status !== 404) throw error;
           console.warn('Cached schedule spreadsheet was not found; creating a replacement.', error);
           record = null;
+        }
+      }
+
+      // If a cached ID went missing, re-check Drive before creating anything new.
+      if (!record) {
+        record = await findExistingScheduleSpreadsheet(token);
+        if (record) {
+          saveScheduleSheetRecord(email, record);
+          const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+          record.chipDropdownApplied = chipDropdownApplied;
+          saveScheduleSheetRecord(email, record);
+          renderScheduleSheetNotice(record, chipDropdownApplied
+            ? 'Drive内で既存の今日の予定スプレッドシートを見つけて再接続しました。'
+            : 'Drive内の既存予定表を再利用しました。チップ型設定が使えなかったため、通常のプルダウンを設定しました。');
+          return record;
         }
       }
 
