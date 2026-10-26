@@ -19,6 +19,23 @@ const AMEDAS_MAP={'34392':{temp:[18,1],humidity:[61,1],wind:[4,1],precipitation1
 const GSI=[{type:'Feature',geometry:{type:'Point',coordinates:[140.8630611,38.2097422]},properties:{title:'宮城県仙台市太白区富沢西4丁目12-1'}}];
 const ZIP={status:200,message:null,results:[{zipcode:'9820037',prefcode:'04',address1:'宮城県',address2:'仙台市太白区',address3:'富沢',kana1:'ミヤギケン',kana2:'センダイシタイハクク',kana3:'トミザワ'}]};
 const GEO={results:[{id:1,name:'仙台市太白区 富沢',latitude:38.209958,longitude:140.860147,country:'日本',country_code:'JP',admin1:'宮城県',admin2:'仙台市太白区'}]};
+const OPEN_METEO={
+ current:{time:'2026-10-27T08:00',temperature_2m:18,relative_humidity_2m:61,apparent_temperature:18,wind_speed_10m:4,weather_code:2},
+ hourly:{
+  time:['2026-10-27T06:00','2026-10-27T07:00','2026-10-27T08:00','2026-10-27T09:00','2026-10-27T12:00','2026-10-27T18:00','2026-10-28T00:00'],
+  temperature_2m:[14,16,18,19,20,16,12],
+  precipitation_probability:[0,0,10,10,20,20,30],
+  weather_code:[3,2,2,1,0,2,61]
+ },
+ daily:{
+  time:['2026-10-27','2026-10-28','2026-10-29','2026-10-30','2026-10-31','2026-11-01','2026-11-02'],
+  weather_code:[2,0,61,3,0,2,1],
+  precipitation_probability_max:[10,10,60,50,0,20,10],
+  temperature_2m_min:[12,10,11,9,8,9,10],
+  temperature_2m_max:[20,19,17,14,16,17,18]
+ }
+};
+
 
 const browser=await chromium.launch({headless:true});
 const context=await browser.newContext({serviceWorkers:'block',permissions:['geolocation'],geolocation:{latitude:38.209958,longitude:140.860147}});
@@ -26,6 +43,7 @@ const page=await context.newPage();
 const errors=[];
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
+await page.route('https://api.open-meteo.com/v1/forecast**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(OPEN_METEO)}));
 const forecastMock=route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(JMA_FORECAST)});
 await page.route('https://www.jma.go.jp/bosai/forecast/data/forecast/**',forecastMock);
 await page.route('https://www.jma.go.jp/bosai/amedas/const/amedastable.json',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(AMEDAS_TABLE)}));
