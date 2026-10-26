@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 30336,
+  "elapsed_ms": 377,
   "forecast_requests": 0,
   "features": {
     "edit_address": true,
@@ -13,6 +13,6 @@
   "browser_errors": [
     "pageerror: pm.forEach is not a function"
   ],
-  "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:54:14",
-  "timestamp": "2026-10-26T22:44:00.863Z"
+  "failure": "page.evaluate: ReferenceError: bgApi is not defined\n    at Object.pal [as applyPalette] (http://127.0.0.1:4173/index.html?weather-test=v2:544:2)\n    at eval (eval at evaluate (:370:30), <anonymous>:10:26)\n    at UtilityScript.evaluate (<anonymous>:372:16)\n    at UtilityScript.<anonymous> (<anonymous>:1:44)\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:72:34",
+  "timestamp": "2026-10-26T22:47:57.170Z"
 }
