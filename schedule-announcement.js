@@ -76,10 +76,19 @@
   const TTS_QUEST_API = 'https://api.tts.quest/v3/voicevox/synthesis';
   const TTS_QUEST_SPEAKER = 2;
   const TTS_FAST_API = 'https://deprecatedapis.tts.quest/v2/voicevox/audio/';
+  // 公開リポジトリに書き込まれた高速APIキー。誰でも閲覧できる点に注意。
+  const TTS_FAST_API_KEY = 'r58-i959Z0595-s';
   const TTS_FAST_KEY_STORAGE = 'pc-voicevox-fast-api-key-v1';
+  const TTS_FAST_KEY_DISABLED = '__DISABLED__';
   const getFastApiKey = () => {
-    try { return String(localStorage.getItem(TTS_FAST_KEY_STORAGE) || '').trim(); }
-    catch (error) { return ''; }
+    try {
+      const saved = localStorage.getItem(TTS_FAST_KEY_STORAGE);
+      if (saved === TTS_FAST_KEY_DISABLED) return '';
+      if (saved !== null) return String(saved).trim();
+      return TTS_FAST_API_KEY;
+    } catch (error) {
+      return TTS_FAST_API_KEY;
+    }
   };
   const voicevoxQuestPreparedAudio = new Map();
   const VOICEVOX_AUDIO_URL_CACHE_MS = 10 * 60 * 1000;
@@ -438,17 +447,17 @@
       const value = String(keyInput.value || '').trim();
       try {
         if (value) localStorage.setItem(TTS_FAST_KEY_STORAGE, value);
-        else localStorage.removeItem(TTS_FAST_KEY_STORAGE);
+        else localStorage.setItem(TTS_FAST_KEY_STORAGE, TTS_FAST_KEY_DISABLED);
         keyStatus.textContent = value
-          ? '高速APIキーをこのブラウザーに保存しました。GitHubには保存していません。'
-          : '高速APIキーを削除しました。次回は低速APIを使います。';
+          ? '高速APIキーをこのブラウザーに保存しました。'
+          : '高速APIを無効にしました。次回は低速APIを使います。';
       } catch (error) {
         keyStatus.textContent = 'ブラウザーの保存領域に保存できませんでした。';
       }
     };
     saveKeyButton.addEventListener('click', persistKey);
     clearKeyButton.addEventListener('click', () => { keyInput.value = ''; persistKey(); });
-    if (getFastApiKey()) keyStatus.textContent = '高速APIキーを保存済みです。音声発表時に高速APIを優先します。';
+    if (getFastApiKey()) keyStatus.textContent = '高速APIキーを利用できます。音声発表時に高速APIを優先します。';
     keyActions.append(saveKeyButton, clearKeyButton);
     keyLabel.appendChild(keyInput);
     box.append(title, statusNode, note, apiHelp, apiLink, document.createTextNode(' '), keyLink, keyLabel, keyActions, keyStatus);
