@@ -54,7 +54,7 @@
 
   function yahooDate(value) {
     const stamp = String(value || '');
-    if (!/^\\d{12}$/.test(stamp)) return NaN;
+    if (stamp.length !== 12 || !/^[0-9]{12}$/.test(stamp)) return NaN;
     return Date.parse(stamp.slice(0, 4) + '-' + stamp.slice(4, 6) + '-' + stamp.slice(6, 8) +
       'T' + stamp.slice(8, 10) + ':' + stamp.slice(10, 12) + ':00+09:00');
   }
