@@ -489,7 +489,7 @@
   }
 
   function installWeatherSourcePicker() {
-    let panel = document.getElementById('pcWeatherSourcePanel') || document.getElementById('pcYahooRainPanel');
+    let panel = document.getElementById('pcWeatherSourcePanel');
     if (!panel) {
       panel = document.createElement('section');
       panel.id = 'pcWeatherSourcePanel';
