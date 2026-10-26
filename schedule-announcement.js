@@ -141,23 +141,24 @@
     if (!phrase) throw new Error('読み上げる文章が空です。');
     if (phrase.length > 500) throw new Error('読み上げ文が長いため、高速APIは使わず別の方法を試します。');
 
-    const params = new URLSearchParams({
-      key,
-      text: phrase,
+    // The API documentation accepts the key and text in the POST body.
+    // Voice/tuning options are query parameters on this endpoint.
+    const options = new URLSearchParams({
       speaker: String(TTS_QUEST_SPEAKER),
       pitch: '0',
       intonationScale: '1',
       speed: '1'
     });
+    const body = new URLSearchParams({ key, text: phrase });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), TTS_FAST_TIMEOUT_MS);
     let response;
     let blob;
     try {
-      response = await fetch(TTS_FAST_API, {
+      response = await fetch(TTS_FAST_API + '?' + options.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: params.toString(),
+        body: body.toString(),
         cache: 'no-store',
         credentials: 'omit',
         signal: controller.signal
