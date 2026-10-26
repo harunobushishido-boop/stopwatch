@@ -58,14 +58,14 @@
         setError('');
         setStatus('Googleの保存済みアクセス許可を確認しています。自動接続できない場合はGoogleアカウント欄の「再接続」を押してください。');
         const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
-        if (!requested) setError('Google接続がまだ準備できていません。ページの読み込みが終わってから再試行してください。');
+        if (!requested && !(typeof window.__pcGoogleAccessIsPending === 'function' && window.__pcGoogleAccessIsPending())) setError('Google接続を開始できませんでした。Googleアカウント欄の「Googleへのアクセスを再接続」を押してください。');
         return;
       }
       accessToken = token;
       tokenExpiresAt = expiry;
       const record = await autoCreateScheduleSpreadsheet();
-      setStatus('今日の予定シートに接続しました。');
-      renderScheduleSheetNotice(record, '今日の予定シートに接続しました。');
+      setStatus('明日の持ち物シートに接続しました。');
+      renderScheduleSheetNotice(record, '明日の持ち物シートに接続しました。');
     } catch (error) {
       setError(error.message || 'Googleスプレッドシートに接続できませんでした。');
       setStatus('未接続');
@@ -178,7 +178,7 @@
       setError('');
       setStatus('Google接続を確認しています。接続後に、もう一度「持ち物テスト」を押してください。');
       const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
-      if (!requested) setError('Google接続が準備できていません。ページの読み込みが終わってから再試行してください。');
+      if (!requested && !(typeof window.__pcGoogleAccessIsPending === 'function' && window.__pcGoogleAccessIsPending())) setError('Google接続を開始できませんでした。Googleアカウント欄の「Googleへのアクセスを再接続」を押してください。');
       return;
     }
 
@@ -187,18 +187,18 @@
     try {
       if (!record || !record.spreadsheetId) record = await autoCreateScheduleSpreadsheet();
     } catch (error) {
-      setError('今日の予定スプレッドシートを自動作成できませんでした。' + (error.message || '不明なエラー'));
+      setError('明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
       setStatus('作成に失敗しました');
       console.error('Schedule spreadsheet auto-create failed', error);
       return;
     }
     const id = record && record.spreadsheetId;
     if (!id) {
-      setError('今日の予定スプレッドシートのIDを取得できませんでした。Googleログインをやり直してください。');
+      setError('明日の持ち物シートのIDを取得できませんでした。Google接続を確認してください。');
       return;
     }
     testButton.disabled = true;
-    testButton.textContent = '今日の予定を読み取り中…';
+    testButton.textContent = '明日の持ち物を読み取り中…';
     setStatus('明日の持ち物を読み取っています。');
     if (testOutput) testOutput.replaceChildren();
 
@@ -212,8 +212,10 @@
 
       const row = values[1] || [];
       if (!row.some(cell => String(cell == null ? '' : cell).trim())) {
-        throw new Error('「予定」シートの2行目に、今日の授業時間数・予定・持ち物を入力してください。日付の入力は不要です。');
+        throw new Error('「予定」シートのA2で授業時間数、D2で明日の持ち物を入力してください。');
       }
+      const items = String(row[3] == null ? '' : row[3]).trim();
+      if (!items) throw new Error('「予定」シートのD2に明日の持ち物を入力してください。');
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
       if (!Number.isInteger(classes) || classes < 1 || classes > 6) {
         throw new Error('「予定」シートのA2で、授業時間数を1〜6時間から選んでください。');
@@ -454,7 +456,7 @@
     }
   }
 
-  const SCHEDULE_SPREADSHEET_TITLE = '6年4組便利タイマー - 今日の予定';
+  const SCHEDULE_SPREADSHEET_TITLE = '6年4組便利タイマー - 明日の持ち物';
 
   async function scheduleApiJson(url, token, options = {}) {
     const response = await fetch(url, {
@@ -493,8 +495,8 @@
           record.chipDropdownApplied = chipDropdownApplied;
           saveScheduleSheetRecord(email, record);
           renderScheduleSheetNotice(record, chipDropdownApplied
-            ? '既存の今日の予定スプレッドシートに接続しました。チップ型プルダウンも確認しました。'
-            : '既存の予定シートに接続しました。予定データは保存済みです。チップ型設定が使えなかったため、通常のプルダウンを設定しました。');
+            ? '既存の明日の持ち物シートに接続しました。授業時間数のプルダウンを確認しました。'
+            : '既存の持ち物シートに接続しました。授業時間数のプルダウンを設定しました。');
           return record;
         } catch (error) {
           if (error.status === 401 || error.status === 403) throw error;
@@ -526,8 +528,8 @@
       record.chipDropdownApplied = chipDropdownApplied;
       saveScheduleSheetRecord(email, record);
       renderScheduleSheetNotice(record, chipDropdownApplied
-        ? '今日の予定スプレッドシートを自動作成しました。チップ型プルダウンを設定しました。'
-        : '今日の予定スプレッドシートを自動作成しました。予定データは保存済みですが、チップ型設定に失敗したため通常のプルダウンを設定しました。');
+        ? '明日の持ち物シートを自動作成し、授業時間数のプルダウンを設定しました。'
+        : '明日の持ち物シートを自動作成し、授業時間数のプルダウンを設定しました。');
       return record;
     })();
     try {
@@ -557,11 +559,11 @@
       link.href = record.url;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
-      link.textContent = '予定表スプレッドシートを開く';
+      link.textContent = '明日の持ち物シートを開く';
       link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
       node.appendChild(link);
       const detail = document.createElement('p');
-      detail.textContent = '「予定」シートの2行目だけを今日の予定として使用します。日付入力は不要です。';
+      detail.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物を指定します。日付入力は不要です。';
       detail.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
       node.appendChild(detail);
     }
@@ -593,7 +595,7 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Googleログイン後に今日の予定シートを自動作成します。日付の入力は不要で、2行目の内容をすべて今日の予定として発表します。';
+    note.textContent = 'Google接続後に明日の持ち物シートを自動作成します。スプレッドシートが削除されていた場合も再作成し、授業時間数のプルダウンを設定します。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
@@ -617,14 +619,14 @@
     const foot = document.createElement('p');
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
-    foot.textContent = '「予定」シートは見出し1行＋入力1行だけです。A列=授業時間数、B列=区分、C列=特別の記入、D列=今日の予定・持ち物、E列=発表文。日付は不要です。';
+    foot.textContent = '「予定」シートは見出し1行＋入力1行です。A列=授業時間数（1〜6のプルダウン）、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ。';
     group.append(title, note, statusNode, errorNode, actions, testOutput, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
     connectButton.addEventListener('click', connect);
     testButton.addEventListener('click', runPackingTest);
-    if (activeScheduleRecord()) setStatus('自動作成した今日の予定シートを使用します。');
+    if (activeScheduleRecord()) setStatus('明日の持ち物シートを使用します。存在しない場合は自動で再作成します。');
     window.PC_SHEETS = {
       connect,
       ensureScheduleSpreadsheet: autoCreateScheduleSpreadsheet,
