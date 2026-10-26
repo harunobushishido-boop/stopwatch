@@ -45,7 +45,7 @@ const errors=[];
 let forecastRequests=0;
 page.on('pageerror',e=>errors.push('pageerror: '+e.message));
 page.on('console',m=>{if(m.type()==='error')errors.push('console: '+m.text())});
-await page.route('https://api.open-meteo.com/v1/forecast**',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(OPEN_METEO)}));
+await page.route('https://api.open-meteo.com/v1/forecast**',async route=>{forecastRequests++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(OPEN_METEO)})});
 const mockForecast=async route=>{forecastRequests++;await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(JMA_FORECAST)})};
 await page.route('https://www.jma.go.jp/bosai/forecast/data/forecast/**',mockForecast);
 await page.route('https://www.jma.go.jp/bosai/amedas/const/amedastable.json',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(AMEDAS_TABLE)}));
@@ -69,6 +69,30 @@ try{
   assert.equal(await page.locator('#pcWeatherSourcePanel').count(), 1, 'Open-Meteo/JMA source picker should be present');
   assert.equal(await page.locator('#pcWeatherSourcePanel [data-weather-provider="open-meteo"]').count(), 1, 'Open-Meteo source option should be present');
   assert.equal(await page.locator('#pcWeatherSourcePanel [data-weather-provider="jma"]').count(), 1, 'JMA source option should be present');
+  const themeStates = await page.evaluate(() => {
+    const shell = document.querySelector('.clk-shell');
+    const midnight = document.querySelector('.clk-palette-mini[aria-label="ミッドナイト"]');
+    midnight?.click();
+    const night = {
+      bg: getComputedStyle(shell).getPropertyValue('--clk-bg').trim(),
+      fg: getComputedStyle(shell).getPropertyValue('--clk-fg').trim(),
+      active: Boolean(midnight?.classList.contains('clk-palette-mini--active'))
+    };
+    window.__clkThemeApi.applyPalette('#FFFFFF', '#F1F5F9', '#F59E0B');
+    const white = { bg: getComputedStyle(shell).getPropertyValue('--clk-bg').trim(), fg: getComputedStyle(shell).getPropertyValue('--clk-fg').trim() };
+    document.querySelector('.clk-color-swatch[aria-label="#F5EFE6"]')?.click();
+    const manual = getComputedStyle(shell).getPropertyValue('--clk-fg').trim();
+    document.querySelector('.clk-palette-mini[aria-label="アイボリー"]')?.click();
+    const ivory = { bg: getComputedStyle(shell).getPropertyValue('--clk-bg').trim(), fg: getComputedStyle(shell).getPropertyValue('--clk-fg').trim() };
+    return { night, white, manual, ivory };
+  });
+  assert.ok(themeStates.night.active, 'non-default palette should activate');
+  assert.match(themeStates.night.bg, /15,\\s*23,\\s*42|#0F172A/i, 'midnight palette background should apply');
+  assert.match(themeStates.night.fg, /241,\\s*245,\\s*249|#F1F5F9/i, 'midnight foreground color should match the theme');
+  assert.match(themeStates.white.fg, /0,\\s*0,\\s*0|#000000/i, 'white background should use black text');
+  assert.match(themeStates.manual, /245,\\s*239,\\s*230|#F5EFE6/i, 'manual foreground color should override auto black');
+  assert.match(themeStates.ivory.bg, /248,\\s*244,\\s*236|#F8F4EC/i, 'ivory palette background should apply');
+  assert.match(themeStates.ivory.fg, /31,\\s*41,\\s*55|#1F2937/i, 'ivory palette foreground color should match the theme');
   await page.locator('button.clk-controls__btn[aria-label="天気"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
   await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[1]?.textContent==='4.0 m/s',{timeout:5000});
   assert.equal(await page.locator('.clk-weather__stat-value').nth(0).innerText(),'61%');
