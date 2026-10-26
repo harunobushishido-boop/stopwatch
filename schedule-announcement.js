@@ -99,7 +99,8 @@
         : (/[。．.!！?？]$/.test(specialDetail) ? specialDetail : specialDetail + '。'));
     }
     const extra = String(additional || '').trim();
-    if (extra && extra !== items && !extra.includes(items) && !/^明日の持ち物/.test(extra)) {
+    const classCountAnnouncement = /(?:今日|本日)?(?:の)?授業は?\s*[1-6]時間授業|[1-6]時間授業です/.test(extra);
+    if (extra && !classCountAnnouncement && extra !== items && !extra.includes(items) && !/^明日の持ち物/.test(extra)) {
       sentences.push(/[。．.!！?？]$/.test(extra) ? extra : extra + '。');
     }
     return sentences.join(' ');
@@ -410,7 +411,7 @@
       }
       const record = recordForCurrentUser();
       if (!record || !record.spreadsheetId) {
-        setStatus('今日の予定シートを準備しています…');
+        setStatus('明日の持ち物シートを準備しています…');
         return;
       }
       const rows = await readRows(forceRefresh);
