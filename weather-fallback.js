@@ -335,7 +335,7 @@
           console.warn('気象庁への接続に失敗したため、保存済みの気象庁予報を表示します。', error);
           return { version: 1, fetchedAt: backup.fetchedAt, data: backup.data, stale: true };
         }
-        throw new Error('気象庁から予報を取得できませんでした。通信状態を確認して、時間をおいて再取得してください。');
+        throw new Error('気象庁から予報を取得できませんでした。詳細: ' + String(error && error.message || error) + '。通信状態・ブラウザーの通信制限を確認して、時間をおいて再取得してください。');
       } finally {
         forecastInFlight.delete(office.officeCode);
       }
