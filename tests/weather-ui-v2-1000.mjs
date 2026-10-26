@@ -51,8 +51,8 @@ try{
   assert.equal(await page.locator('#pcYahooRainPanel').count(), 0, 'Yahoo weather panel should be removed');
   assert.equal(await page.locator('#pcYahooWeatherSettings').count(), 0, 'Yahoo weather settings should be removed');
   await page.locator('button.clk-controls__btn[aria-label="天気"]').evaluate(el=>el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
-  await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[0]?.textContent==='61%',{timeout:5000});
-  assert.equal(await page.locator('.clk-weather__stat-value').nth(1).innerText(),'4.0 m/s');
+  await page.waitForFunction(()=>document.querySelectorAll('.clk-weather__stat-value')[1]?.textContent==='4.0 m/s',{timeout:5000});
+  assert.equal(await page.locator('.clk-weather__stat-value').nth(0).innerText(),'61%');
   await page.waitForTimeout(10);
 
   const edit=page.locator('.clk-weather__edit-btn');
