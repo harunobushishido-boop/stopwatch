@@ -489,7 +489,7 @@
   }
 
   function installWeatherSourcePicker() {
-    const panel = document.getElementById('pcYahooRainPanel');
+    const panel = document.getElementById('pcWeatherSourcePanel') || document.getElementById('pcYahooRainPanel');
     if (!panel || panel.dataset.providerPickerReady === '1') return;
     panel.id = 'pcWeatherSourcePanel';
     panel.setAttribute('aria-label', '天気情報の取得元');
@@ -545,8 +545,8 @@
   function openMeteoTime(value, isDate) {
     const time = String(value || '');
     if (isDate) return time.slice(0, 10);
-    if (/[zZ]|[+-]\\d{2}:?\\d{2}$/.test(time)) return time;
-    if (/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/.test(time)) return time + ':00+09:00';
+    if (/[zZ]|[+-][0-9]{2}:?[0-9]{2}$/.test(time)) return time;
+    if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/.test(time)) return time + ':00+09:00';
     return time;
   }
 
