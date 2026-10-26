@@ -84,18 +84,25 @@
     const specialDetail = String(source[2] || '').trim();
     const rawItems = String(source[3] || '').trim();
     const additional = String(source[4] || '').trim();
-    const items = [rawItems, kind === '特別' ? specialDetail : ''].filter(Boolean).join('、')
+    const cleanSentencePart = value => String(value || '')
       .replace(/^明日の持ち物(?:は)?[、,：:\s]*/,'')
       .replace(/[。．.!！?？]+$/,'')
       .replace(/です$/,'')
       .trim();
+    const items = cleanSentencePart(rawItems);
     if (!items) return '明日の持ち物が入力されていません。';
-    const mainSentence = '明日の持ち物は、' + items + 'です。';
-    const extra = additional.replace(/^明日の持ち物(?:は)?[、,：:\s]*/,'').trim();
-    const extras = extra && extra !== items && !extra.includes(items) && !/^明日の持ち物/.test(extra)
-      ? [/[。．.!！?？]$/.test(extra) ? extra : extra + '。']
-      : [];
-    return [mainSentence, ...extras].join(' ');
+    const sentences = ['明日の持ち物は、' + items + 'です。'];
+    const detail = cleanSentencePart(specialDetail);
+    if (detail) {
+      sentences.push(kind === '特別'
+        ? '明日の特別な予定は、' + detail + 'です。'
+        : (/[。．.!！?？]$/.test(specialDetail) ? specialDetail : specialDetail + '。'));
+    }
+    const extra = String(additional || '').trim();
+    if (extra && extra !== items && !extra.includes(items) && !/^明日の持ち物/.test(extra)) {
+      sentences.push(/[。．.!！?？]$/.test(extra) ? extra : extra + '。');
+    }
+    return sentences.join(' ');
   }
   window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
   // TTS Quest の無料・APIキー不要のWEB版VOICEVOX APIを使用。
@@ -409,7 +416,7 @@
       const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
-        setStatus('「予定」シートの2行目に、授業時間数と明日の持ち物を入力してください。');
+        setStatus('「予定」シートのA2で授業時間数、D2で明日の持ち物を入力してください。');
         return;
       }
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
@@ -426,17 +433,22 @@
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       const targetMinutes = hour * 60 + minute;
       const key = todayKey() + ':' + classes + ':' + target;
+      const items = String(row[3] == null ? '' : row[3]).trim();
+      if (!items) {
+        setStatus(classes + '時間授業：自動発表予定は' + target + 'です。D2に明日の持ち物を入力すると発表します。');
+        return;
+      }
 
       if (nowMinutes < targetMinutes) {
         if (!getFastApiKey() && targetMinutes - nowMinutes <= 2) {
           prepareVoicevoxQuestAudio(announcementText(row, classes)).catch(error =>
             console.warn('TTS pre-generation failed; speech will fall back at announcement time', error));
         }
-        setStatus(classes + '時間授業：' + target + 'に、今日の予定と持ち物を音声で発表します。');
+        setStatus('明日の持ち物を' + target + 'に音声で発表します。');
         return;
       }
       if (nowMinutes > targetMinutes + 20) {
-        setStatus('今日の発表時刻（' + target + '）を過ぎています。必要に応じて「持ち物テスト」で今すぐ発表できます。');
+        setStatus('明日の持ち物の自動発表時刻（' + target + '）を過ぎています。必要に応じて「持ち物テスト」で今すぐ発表できます。');
         return;
       }
 
@@ -470,7 +482,7 @@
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '「予定」シートの2行目に、授業時間数と明日の持ち物を入力します。A列=授業時間数、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ。授業数から自動発表時刻を計算します（5時間=14:25、6時間=15:25）。ページを開いたままにしてください。';
+    note.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物、必要ならE2で追加のお知らせを入力します。授業時間数は読み上げず、自動発表時刻の計算だけに使います（5時間=14:25、6時間=15:25）。ページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
     apiHelp.textContent = '高速APIキーを設定すると、音声発表時に高速APIを優先します。キー未設定・無効・ポイント不足・タイムアウト時は、APIキー不要の低速APIへ切り替えます。高速APIは利用ポイントを消費します。声は四国めたん（ノーマル）です。';
