@@ -50,6 +50,10 @@ try{
     const circle=page.locator('.clk-timer-circle');
     await circle.waitFor({state:'visible',timeout:2000});
     await page.locator('.clk-panel__close').click({force:true});
+    await page.waitForFunction(() => {
+      const backdrop=document.querySelector('.clk-backdrop');
+      return !backdrop || getComputedStyle(backdrop).visibility==='hidden';
+    }, {timeout:3000});
 
     // stop
     const stop=page.locator('.clk-timer-circle__pause');
