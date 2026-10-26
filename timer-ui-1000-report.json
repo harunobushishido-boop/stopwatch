@@ -9,9 +9,7 @@
     "alarm_stop_code": true,
     "history_best_code": true
   },
-  "browser_errors": [
-    "pageerror: Identifier '$' has already been declared"
-  ],
-  "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n0 !== 1\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:41:10",
-  "timestamp": "2026-10-26T08:05:52.915Z"
+  "browser_errors": [],
+  "failure": "page.goto: Timeout 30000ms exceeded.\nCall log:\n  - navigating to \"http://127.0.0.1:4173/index.html?timer-test=1000\", waiting until \"domcontentloaded\"\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:35:14",
+  "timestamp": "2026-10-26T08:09:00.242Z"
 }
