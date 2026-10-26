@@ -1,23 +1,23 @@
 (function () {
   'use strict';
 
-  const CACHE_PREFIX = 'pc-open-meteo-forecast-v3:';
+  const CACHE_PREFIX = 'pc-jma-forecast-v1:';
   const MAX_STALE_MS = 72 * 60 * 60 * 1000;
+  const JMA_FORECAST_URL = 'https://www.jma.go.jp/bosai/forecast/data/forecast/';
+  const GSI_REVERSE_URL = 'https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress';
 
-  const numericOrBlank = (value) => value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? '' : Number(value);
-  const probabilityOrBlank = (value) => {
+  const numericOrBlank = value =>
+    value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? '' : Number(value);
+  const probabilityOrBlank = value => {
     const n = numericOrBlank(value);
     return n === '' ? '' : Math.max(0, Math.min(100, Math.round(n)));
   };
 
   function jstIso(value) {
-    let text = String(value || '').trim();
+    const text = String(value || '').trim();
     if (!text) return '';
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-    text = text.replace(' ', 'T');
-    if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(text)) return text;
-    if (/T\d{2}:\d{2}$/.test(text)) text += ':00';
-    return text + '+09:00';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text + 'T00:00:00+09:00';
+    return text.replace(/Z$/, '+00:00');
   }
 
   async function requestJson(url, timeoutMs = 9000) {
@@ -38,32 +38,8 @@
     return CACHE_PREFIX + Number(lat).toFixed(3) + ',' + Number(lon).toFixed(3);
   }
 
-  function jmaStyleCode(openMeteoCode) {
-    const code = Number(openMeteoCode);
-    if ([71, 73, 75, 77, 85, 86].includes(code)) return '400';
-    if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(code)) return '300';
-    if (code === 0 || code === 1) return '100';
-    return Number.isFinite(code) ? '200' : '200';
-  }
-
-  function makeOpenMeteoUrl(lat, lon) {
-    const params = new URLSearchParams({
-      latitude: String(lat),
-      longitude: String(lon),
-      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
-      hourly: 'temperature_2m,relative_humidity_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m',
-      daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
-      timezone: 'Asia/Tokyo',
-      forecast_days: '7',
-      temperature_unit: 'celsius',
-      wind_speed_unit: 'kmh',
-      precipitation_unit: 'mm'
-    });
-    return 'https://api.open-meteo.com/v1/forecast?' + params.toString();
-  }
-
   function attachMeta(forecast, source, fetchedAt, stale) {
-    forecast.__source = source || 'Open-Meteo';
+    forecast.__source = source || '気象庁';
     forecast.__fetchedAt = Number(fetchedAt) || Date.now();
     forecast.__stale = Boolean(stale);
     return forecast;
@@ -71,131 +47,197 @@
 
   function validForecast(forecast) {
     if (!Array.isArray(forecast) || !forecast[0] || !forecast[1]) return false;
-    const hourly = forecast[0].timeSeries;
-    const daily = forecast[1].timeSeries;
-    return Array.isArray(hourly) && hourly.some((ts) => Array.isArray(ts.timeDefines) && ts.areas?.some((a) => Array.isArray(a.weatherCodes))) &&
-      hourly.some((ts) => Array.isArray(ts.timeDefines) && ts.areas?.some((a) => Array.isArray(a.pops))) &&
-      hourly.some((ts) => Array.isArray(ts.timeDefines) && ts.areas?.some((a) => Array.isArray(a.temps))) &&
-      Array.isArray(daily) && daily.some((ts) => Array.isArray(ts.timeDefines) && ts.areas?.some((a) => Array.isArray(a.weatherCodes))) &&
-      daily.some((ts) => Array.isArray(ts.timeDefines) && ts.areas?.some((a) => Array.isArray(a.tempsMin) && Array.isArray(a.tempsMax)));
+    const short = forecast[0].timeSeries;
+    const weekly = forecast[1].timeSeries;
+    return Array.isArray(short) &&
+      short.some(ts => Array.isArray(ts.timeDefines) && ts.areas?.some(a => Array.isArray(a.weatherCodes))) &&
+      short.some(ts => Array.isArray(ts.timeDefines) && ts.areas?.some(a => Array.isArray(a.pops))) &&
+      short.some(ts => Array.isArray(ts.timeDefines) && ts.areas?.some(a => Array.isArray(a.temps))) &&
+      Array.isArray(weekly) &&
+      weekly.some(ts => Array.isArray(ts.timeDefines) && ts.areas?.some(a => Array.isArray(a.weatherCodes))) &&
+      weekly.some(ts => Array.isArray(ts.timeDefines) && ts.areas?.some(a => Array.isArray(a.tempsMin) && Array.isArray(a.tempsMax)));
   }
 
-  function fromOpenMeteo(data) {
-    const hourly = data && data.hourly;
-    const daily = data && data.daily;
-    const now = data && data.current;
-    if (!hourly || !Array.isArray(hourly.time) || !Array.isArray(hourly.temperature_2m) ||
-        !Array.isArray(hourly.weather_code) || !daily || !Array.isArray(daily.time) ||
-        !Array.isArray(daily.weather_code) || !Array.isArray(daily.temperature_2m_min) ||
-        !Array.isArray(daily.temperature_2m_max)) {
-      throw new Error('Open-Meteoの予報データ形式が不正です');
+  async function prefectureForecastCode(lat, lon) {
+    const url = GSI_REVERSE_URL + '?lat=' + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lon);
+    try {
+      const data = await requestJson(url, 7000);
+      const muniCode = String(data && data.results && data.results.muniCd || '').replace(/\D/g, '');
+      const prefecture = muniCode.slice(0, 2);
+      if (/^\d{2}$/.test(prefecture) && Number(prefecture) >= 1 && Number(prefecture) <= 47) {
+        return prefecture.padStart(2, '0') + '0000';
+      }
+    } catch (error) {
+      console.warn('国土地理院の逆ジオコーディングに失敗しました。', error);
     }
 
-    const hourlyRows = hourly.time.map((time, index) => ({
-      iso: jstIso(time),
-      temp: numericOrBlank(hourly.temperature_2m[index]),
-      humidity: numericOrBlank(hourly.relative_humidity_2m && hourly.relative_humidity_2m[index]),
-      wind: numericOrBlank(hourly.wind_speed_10m && hourly.wind_speed_10m[index]),
-      code: jmaStyleCode(hourly.weather_code[index]),
-      pop: probabilityOrBlank(hourly.precipitation_probability && hourly.precipitation_probability[index])
-    })).filter((row) => row.iso);
+    // The user's saved default point is Tomizawa Elementary School, Sendai.
+    // Use this only as a narrow fallback for the Sendai area, never for unrelated coordinates.
+    if (lat >= 37.9 && lat <= 38.6 && lon >= 140.45 && lon <= 141.25) return '040000';
+    throw new Error('この位置の都道府県コードを取得できませんでした。位置情報を再取得するか、場所を選び直してください。');
+  }
 
-    const dailyRows = daily.time.map((date, index) => ({
-      date: String(date),
-      code: jmaStyleCode(daily.weather_code[index]),
-      pop: probabilityOrBlank(daily.precipitation_probability_max && daily.precipitation_probability_max[index]),
-      min: numericOrBlank(daily.temperature_2m_min[index]),
-      max: numericOrBlank(daily.temperature_2m_max[index])
-    })).filter((row) => /^\d{4}-\d{2}-\d{2}$/.test(row.date));
+  function pickArea(areas, prefectureCode, lat, lon) {
+    const rows = Array.isArray(areas) ? areas : [];
+    if (!rows.length) return null;
+    if (prefectureCode === '040000') {
+      const preferred = lon < 140.65 ? '西部' : '東部';
+      return rows.find(item => String(item.area && item.area.name || '').includes(preferred)) || rows[0];
+    }
+    return rows[0];
+  }
 
-    if (!hourlyRows.length || !dailyRows.length) throw new Error('Open-Meteoの予報が空です');
+  function pickTemperatureArea(areas, prefectureCode) {
+    const rows = Array.isArray(areas) ? areas : [];
+    if (!rows.length) return null;
+    // The JMA forecast's temperature series is station-based, unlike the regional weather forecast.
+    if (prefectureCode === '040000') {
+      return rows.find(item => String(item.area && item.area.name || '') === '仙台') || rows[0];
+    }
+    return rows[0];
+  }
 
-    const current = {
-      time: jstIso(now && now.time),
-      temp: numericOrBlank(now && now.temperature_2m),
-      humidity: numericOrBlank(now && now.relative_humidity_2m),
-      apparentTemp: numericOrBlank(now && now.apparent_temperature),
-      wind: numericOrBlank(now && now.wind_speed_10m),
-      windDirection: numericOrBlank(now && now.wind_direction_10m),
-      precipitation: numericOrBlank(now && now.precipitation),
-      code: jmaStyleCode(now && now.weather_code),
-      isDay: Number(now && now.is_day) === 1
-    };
-
-    // Older/partial API responses are handled by using the closest hourly record.
-    if (current.temp === '') {
-      const target = Date.now();
-      const nearest = hourlyRows.reduce((best, row) => {
-        const distance = Math.abs(Date.parse(row.iso) - target);
-        return !best || distance < best.distance ? { row, distance } : best;
-      }, null);
-      if (nearest) {
-        current.time = nearest.row.iso;
-        current.temp = nearest.row.temp;
-        current.humidity = nearest.row.humidity;
-        current.wind = nearest.row.wind;
-        current.code = nearest.row.code;
+  function atOrBefore(timeDefines, values, targetTime) {
+    if (!Array.isArray(timeDefines) || !Array.isArray(values) || !timeDefines.length) return '';
+    const target = Date.parse(targetTime);
+    let chosen = -1;
+    let bestDistance = Infinity;
+    for (let i = 0; i < timeDefines.length; i++) {
+      const stamp = Date.parse(timeDefines[i]);
+      if (!Number.isFinite(stamp)) continue;
+      if (stamp <= target && target - stamp < bestDistance) {
+        chosen = i;
+        bestDistance = target - stamp;
       }
     }
+    if (chosen < 0) {
+      let nearest = 0;
+      for (let i = 1; i < timeDefines.length; i++) {
+        if (Math.abs(Date.parse(timeDefines[i]) - target) < Math.abs(Date.parse(timeDefines[nearest]) - target)) nearest = i;
+      }
+      chosen = nearest;
+    }
+    return numericOrBlank(values[chosen]);
+  }
 
-    const area = { name: 'Open-Meteo', code: 'open-meteo' };
+  function fromJma(data, prefectureCode, lat, lon) {
+    if (!Array.isArray(data) || !data[0] || !Array.isArray(data[0].timeSeries) || !data[1] || !Array.isArray(data[1].timeSeries)) {
+      throw new Error('気象庁の天気予報データ形式が正しくありません');
+    }
+    const shortTs = data[0].timeSeries;
+    const weeklyTs = data[1].timeSeries;
+    const shortWeather = shortTs.find(ts => ts.areas?.some(a => Array.isArray(a.weatherCodes)));
+    const shortPop = shortTs.find(ts => ts.areas?.some(a => Array.isArray(a.pops)));
+    const shortTemp = shortTs.find(ts => ts.areas?.some(a => Array.isArray(a.temps)));
+    const weeklyWeather = weeklyTs.find(ts => ts.areas?.some(a => Array.isArray(a.weatherCodes)));
+    const weeklyTemp = weeklyTs.find(ts => ts.areas?.some(a => Array.isArray(a.tempsMin) && Array.isArray(a.tempsMax)));
+    if (!shortWeather || !shortPop || !shortTemp || !weeklyWeather || !weeklyTemp) {
+      throw new Error('気象庁の予報項目がそろっていません');
+    }
+
+    const regionWeather = pickArea(shortWeather.areas, prefectureCode, lat, lon);
+    const regionPop = pickArea(shortPop.areas, prefectureCode, lat, lon);
+    const regionalWeekly = pickArea(weeklyWeather.areas, prefectureCode, lat, lon);
+    const stationTemp = pickTemperatureArea(shortTemp.areas, prefectureCode);
+    const weeklyStationTemp = pickTemperatureArea(weeklyTemp.areas, prefectureCode);
+    if (!regionWeather || !regionPop || !regionalWeekly || !stationTemp || !weeklyStationTemp) {
+      throw new Error('選択地点の予報エリアが見つかりません');
+    }
+
+    const codeArea = { name: regionWeather.area && regionWeather.area.name || '予報エリア', code: regionWeather.area && regionWeather.area.code || '' };
+    const tempArea = { name: stationTemp.area && stationTemp.area.name || '気温予報地点', code: stationTemp.area && stationTemp.area.code || '' };
+    const weeklyTempArea = { name: weeklyStationTemp.area && weeklyStationTemp.area.name || '気温予報地点', code: weeklyStationTemp.area && weeklyStationTemp.area.code || '' };
+    const shortWeatherTimes = (shortWeather.timeDefines || []).map(jstIso);
+    const shortPopTimes = (shortPop.timeDefines || []).map(jstIso);
+    const shortTempTimes = (shortTemp.timeDefines || []).map(jstIso);
+    const weeklyWeatherTimes = (weeklyWeather.timeDefines || []).map(jstIso);
+    const weeklyTempTimes = (weeklyTemp.timeDefines || []).map(jstIso);
+
     const forecast = [
       {
-        publishingOffice: 'Open-Meteo',
+        publishingOffice: data[0].publishingOffice || '気象庁',
+        reportDatetime: data[0].reportDatetime || '',
         timeSeries: [
-          { timeDefines: hourlyRows.map((row) => row.iso), areas: [{ area, weatherCodes: hourlyRows.map((row) => row.code) }] },
-          { timeDefines: hourlyRows.map((row) => row.iso), areas: [{ area, pops: hourlyRows.map((row) => row.pop) }] },
-          { timeDefines: hourlyRows.map((row) => row.iso), areas: [{ area, temps: hourlyRows.map((row) => row.temp) }] }
+          { timeDefines: shortWeatherTimes, areas: [{ area: codeArea, weatherCodes: (regionWeather.weatherCodes || []).map(String) }] },
+          { timeDefines: shortPopTimes, areas: [{ area: codeArea, pops: (regionPop.pops || []).map(probabilityOrBlank) }] },
+          { timeDefines: shortTempTimes, areas: [{ area: tempArea, temps: (stationTemp.temps || []).map(numericOrBlank) }] }
         ]
       },
       {
-        publishingOffice: 'Open-Meteo',
+        publishingOffice: data[1].publishingOffice || data[0].publishingOffice || '気象庁',
+        reportDatetime: data[1].reportDatetime || '',
         timeSeries: [
           {
-            timeDefines: dailyRows.map((row) => row.date),
-            areas: [{ area, weatherCodes: dailyRows.map((row) => row.code), pops: dailyRows.map((row) => row.pop) }]
+            timeDefines: (weeklyWeather.timeDefines || []).map(jstIso),
+            areas: [{
+              area: codeArea,
+              weatherCodes: (regionalWeekly.weatherCodes || []).map(String),
+              pops: (regionalWeekly.pops || []).map(probabilityOrBlank)
+            }]
           },
           {
-            timeDefines: dailyRows.map((row) => row.date),
-            areas: [{ area, tempsMin: dailyRows.map((row) => row.min), tempsMax: dailyRows.map((row) => row.max) }]
+            timeDefines: weeklyTempTimes,
+            areas: [{
+              area: weeklyTempArea,
+              tempsMin: (weeklyStationTemp.tempsMin || []).map(numericOrBlank),
+              tempsMax: (weeklyStationTemp.tempsMax || []).map(numericOrBlank)
+            }]
           }
         ]
       }
     ];
+
+    const nowIso = new Date().toISOString();
+    const currentWeather = atOrBefore(shortWeatherTimes, regionWeather.weatherCodes || [], nowIso);
+    const currentTemp = atOrBefore(shortTempTimes, stationTemp.temps || [], nowIso);
+    const current = {
+      time: shortTempTimes.find((time, index) => Date.parse(time) <= Date.now() && numericOrBlank((stationTemp.temps || [])[index]) !== '') || shortTempTimes[0] || '',
+      temp: currentTemp,
+      humidity: '',
+      apparentTemp: '',
+      wind: '',
+      windDirection: '',
+      precipitation: '',
+      code: currentWeather === '' ? '200' : String(currentWeather).padStart(3, '0'),
+      isDay: true
+    };
     forecast.__current = current;
-    return attachMeta(forecast, 'Open-Meteo（時間別・7日間予報）', Date.now(), false);
+    forecast.__reportDatetime = data[0].reportDatetime || '';
+    forecast.__regionName = codeArea.name;
+    return attachMeta(forecast, '気象庁（地域予報・週間予報）', Date.now(), false);
   }
 
   function saveForecast(key, forecast) {
     try {
       localStorage.setItem(key, JSON.stringify({
-        version: 3,
-        source: forecast.__source || 'Open-Meteo',
+        version: 4,
+        source: forecast.__source || '気象庁',
         fetchedAt: forecast.__fetchedAt || Date.now(),
         current: forecast.__current || null,
+        reportDatetime: forecast.__reportDatetime || '',
+        regionName: forecast.__regionName || '',
         forecast
       }));
-    } catch (error) {
-      // Storage quota/privacy mode must not block live weather.
-    }
+    } catch (error) {}
     return forecast;
   }
 
   function readCachedForecast(key) {
     try {
       const stored = JSON.parse(localStorage.getItem(key) || 'null');
-      if (!stored || stored.version !== 3 || !Array.isArray(stored.forecast) ||
+      if (!stored || stored.version !== 4 || !Array.isArray(stored.forecast) ||
           !validForecast(stored.forecast) || !Number.isFinite(Number(stored.fetchedAt))) return null;
       if (Date.now() - Number(stored.fetchedAt) > MAX_STALE_MS) return null;
       stored.forecast.__current = stored.current || null;
-      const dateLabel = new Date(Number(stored.fetchedAt)).toLocaleString('ja-JP', { hour12: false });
-      return attachMeta(stored.forecast, 'Open-Meteo（保存済み予報）', Number(stored.fetchedAt), true);
+      stored.forecast.__reportDatetime = stored.reportDatetime || '';
+      stored.forecast.__regionName = stored.regionName || '';
+      return attachMeta(stored.forecast, '気象庁（保存済み予報）', Number(stored.fetchedAt), true);
     } catch (error) {
       return null;
     }
   }
 
-  async function getOpenMeteoForecast(lat, lon) {
+  async function getJmaForecast(lat, lon) {
     const latitude = Number(lat);
     const longitude = Number(lon);
     if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
@@ -204,22 +246,25 @@
     }
     const key = cacheKey(latitude, longitude);
     try {
-      const data = await requestJson(makeOpenMeteoUrl(latitude, longitude), 9000);
-      const forecast = fromOpenMeteo(data);
-      if (!validForecast(forecast)) throw new Error('Open-Meteoの予報データを検証できません');
+      const prefectureCode = await prefectureForecastCode(latitude, longitude);
+      const data = await requestJson(JMA_FORECAST_URL + encodeURIComponent(prefectureCode) + '.json', 10000);
+      const forecast = fromJma(data, prefectureCode, latitude, longitude);
+      if (!validForecast(forecast)) throw new Error('気象庁の予報データを検証できません');
       return saveForecast(key, forecast);
     } catch (error) {
       const cached = readCachedForecast(key);
       if (cached) {
-        console.warn('Open-Meteoの取得に失敗したため、保存済み予報を表示します。', error);
+        console.warn('気象庁からの取得に失敗したため、保存済み予報を表示します。', error);
         return cached;
       }
-      throw new Error('Open-Meteoから天気予報を取得できませんでした。通信状態を確認して再取得してください。');
+      throw new Error('気象庁の天気予報を取得できませんでした。位置情報・通信状態を確認して再取得してください。(' + String(error && error.message || error) + ')');
     }
   }
 
   window.__weatherFallback = {
-    getOpenMeteoForecast,
+    getJmaForecast,
+    // A compatibility alias for the inline weather renderer; it now uses JMA data only.
+    getOpenMeteoForecast: getJmaForecast,
     isValidForecast: validForecast
   };
 
