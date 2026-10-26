@@ -7,11 +7,8 @@
   let statusNode, errorNode, connectButton, testButton, testOutput;
 
   function activeScheduleRecord() {
-    try {
-      const email = String(window.PC_AUTH && window.PC_AUTH.currentUser && window.PC_AUTH.currentUser.email || '').trim().toLowerCase();
-      if (!email) return null;
-      return JSON.parse(localStorage.getItem('pc-schedule-sheet-v1') || '{}')[email] || null;
-    } catch (error) { return null; }
+    const email = String(window.PC_AUTH && window.PC_AUTH.currentUser && window.PC_AUTH.currentUser.email || '').trim().toLowerCase();
+    return email ? scheduleSheetRecord(email) : null;
   }
 
   const setStatus = (message) => { if (statusNode) statusNode.textContent = message; };
@@ -57,14 +54,16 @@
       const auth = window.PC_AUTH;
       const token = auth && auth.getAccessToken && auth.getAccessToken();
       const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
-      const record = activeScheduleRecord();
       if (!token || !expiry || Date.now() >= expiry) throw new Error('先にGoogleアカウントでログインしてアクセスを許可してください。');
-      if (!record || !record.spreadsheetId) throw new Error('予定表スプレッドシートがまだありません。Googleログイン後、作成が終わるまでお待ちください。');
-      accessToken = token; tokenExpiresAt = expiry;
+      accessToken = token;
+      tokenExpiresAt = expiry;
+      const record = await autoCreateScheduleSpreadsheet();
       setStatus('今日の予定シートに接続しました。');
+      renderScheduleSheetNotice(record, '今日の予定シートに接続しました。');
     } catch (error) {
       setError(error.message || 'Googleスプレッドシートに接続できませんでした。');
       setStatus('未接続');
+      console.error('Schedule spreadsheet connection failed', error);
     } finally {
       connectButton.disabled = false;
       connectButton.textContent = '今日の予定シートを確認';
@@ -166,14 +165,9 @@
 
   async function runPackingTest() {
     setError('');
-    const record = activeScheduleRecord();
-    const id = record && record.spreadsheetId;
+    let record = activeScheduleRecord();
     const token = window.PC_AUTH && window.PC_AUTH.getAccessToken ? window.PC_AUTH.getAccessToken() : '';
     const expiry = window.PC_AUTH && window.PC_AUTH.getAccessTokenExpiresAt ? Number(window.PC_AUTH.getAccessTokenExpiresAt()) : 0;
-    if (!id) {
-      setError('今日の予定スプレッドシートがありません。Googleログインを確認してください。');
-      return;
-    }
     if (!token || !expiry || Date.now() >= expiry) {
       setError('先にGoogleアカウントでログインして、アクセスを許可してください。');
       return;
@@ -181,6 +175,19 @@
 
     accessToken = token;
     tokenExpiresAt = expiry;
+    try {
+      if (!record || !record.spreadsheetId) record = await autoCreateScheduleSpreadsheet();
+    } catch (error) {
+      setError('今日の予定スプレッドシートを自動作成できませんでした。' + (error.message || '不明なエラー'));
+      setStatus('作成に失敗しました');
+      console.error('Schedule spreadsheet auto-create failed', error);
+      return;
+    }
+    const id = record && record.spreadsheetId;
+    if (!id) {
+      setError('今日の予定スプレッドシートのIDを取得できませんでした。Googleログインをやり直してください。');
+      return;
+    }
     testButton.disabled = true;
     testButton.textContent = '今日の予定を読み取り中…';
     setStatus('今日の予定と持ち物を読み取っています。');
@@ -228,18 +235,28 @@
   const SCHEDULE_SHEET_STORAGE_KEY = 'pc-schedule-sheet-v1';
   let scheduleCreationPromise = null;
 
+  const sessionScheduleRecords = Object.create(null);
+
   function scheduleSheetRecord(email) {
     try {
       const all = JSON.parse(localStorage.getItem(SCHEDULE_SHEET_STORAGE_KEY) || '{}');
-      return all[email] || null;
-    } catch (error) { return null; }
+      if (all[email]) return all[email];
+    } catch (error) {}
+    return sessionScheduleRecords[email] || null;
   }
 
   function saveScheduleSheetRecord(email, record) {
+    sessionScheduleRecords[email] = record;
     let all = {};
     try { all = JSON.parse(localStorage.getItem(SCHEDULE_SHEET_STORAGE_KEY) || '{}'); } catch (error) {}
     all[email] = record;
-    localStorage.setItem(SCHEDULE_SHEET_STORAGE_KEY, JSON.stringify(all));
+    try {
+      localStorage.setItem(SCHEDULE_SHEET_STORAGE_KEY, JSON.stringify(all));
+      return true;
+    } catch (error) {
+      console.warn('Schedule sheet ID could not be cached in localStorage; it remains available for this tab.', error);
+      return false;
+    }
   }
 
   function currentTokyoDateKey() {
@@ -361,8 +378,10 @@
       }
     ];
 
-    // Google Sheetsのテーブル列タイプ DROPDOWN は、画像のようなチップ型プルダウンを作成する。
-    // 既存のテーブルが同じ予定シートにある場合は新しいテーブルを重ねて作らない。
+    // 先に予定データと通常のセル設定を保存する。テーブルの失敗で予定の保存まで失敗扱いにしない。
+    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
+
+    // Google Sheets の Table DROPDOWN はチップ型プルダウンを作る。
     const existingTables = Array.isArray(scheduleSheet.tables) ? scheduleSheet.tables : [];
     const overlappingTable = existingTables.find(table => {
       const range = table.range || {};
@@ -371,26 +390,122 @@
         Number(range.startColumnIndex || 0) < 5 &&
         Number(range.endColumnIndex || 0) > 0;
     });
-    if (!overlappingTable) {
-      requests.push({
-        addTable: {
-          table: {
-            name: 'TodaySchedule',
-            range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 5 },
-            columnProperties
-          }
-        }
+    const tableRequest = !overlappingTable
+      ? { addTable: { table: {
+          name: 'TodaySchedule',
+          range: { sheetId, startRowIndex: 0, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 5 },
+          columnProperties
+        } } }
+      : { updateTable: { table: { tableId: overlappingTable.tableId, columnProperties }, fields: 'columnProperties' } };
+    try {
+      await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests: [tableRequest] } });
+      return true;
+    } catch (tableError) {
+      console.warn('Chip-dropdown table setup failed; applying standard dropdown validation instead.', tableError);
+      const validation = values => ({
+        condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) },
+        strict: true,
+        showCustomUi: true
       });
-    } else {
-      // 同じ範囲のテーブルがある場合、その列タイプをチップ型プルダウンに整える。
-      requests.push({
-        updateTable: {
-          table: { tableId: overlappingTable.tableId, columnProperties },
-          fields: 'columnProperties'
-        }
-      });
+      try {
+        await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests: [
+          { setDataValidation: {
+            range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 },
+            rule: validation(['1', '2', '3', '4', '5', '6'])
+          } },
+          { setDataValidation: {
+            range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 },
+            rule: validation(['通常', '特別'])
+          } }
+        ] } });
+      } catch (fallbackError) {
+        console.warn('Standard dropdown fallback failed.', fallbackError);
+      }
+      return false;
     }
-    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
+  }
+
+  const SCHEDULE_SPREADSHEET_TITLE = '6年4組便利タイマー - 今日の予定';
+
+  async function scheduleApiJson(url, token, options = {}) {
+    const response = await fetch(url, {
+      method: options.method || 'GET',
+      headers: Object.assign({ Authorization: 'Bearer ' + token }, options.body ? { 'Content-Type': 'application/json' } : {}),
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      cache: 'no-store'
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data && data.error && data.error.message || ('Google APIエラー（HTTP ' + response.status + '）'));
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+
+  async function autoCreateScheduleSpreadsheet() {
+    if (scheduleCreationPromise) return scheduleCreationPromise;
+    scheduleCreationPromise = (async () => {
+      const auth = window.PC_AUTH;
+      const email = String(auth && auth.currentUser && auth.currentUser.email || '').trim().toLowerCase();
+      const token = auth && auth.getAccessToken && auth.getAccessToken();
+      const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+      if (!email) throw new Error('Googleアカウントのメールアドレスを確認できません。ログインし直してください。');
+      if (!token || !expiry || Date.now() >= expiry) throw new Error('Googleのアクセス許可が期限切れです。Googleアカウント連携ボタンを押してください。');
+      accessToken = token;
+      tokenExpiresAt = expiry;
+
+      let record = scheduleSheetRecord(email);
+      if (record && record.spreadsheetId) {
+        try {
+          const meta = await scheduleApiJson(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '?fields=spreadsheetId,spreadsheetUrl', token);
+          record.url = meta.spreadsheetUrl || record.url || ('https://docs.google.com/spreadsheets/d/' + record.spreadsheetId + '/edit');
+          const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+          record.chipDropdownApplied = chipDropdownApplied;
+          saveScheduleSheetRecord(email, record);
+          renderScheduleSheetNotice(record, chipDropdownApplied
+            ? '既存の今日の予定スプレッドシートに接続しました。チップ型プルダウンも確認しました。'
+            : '既存の予定シートに接続しました。予定データは保存済みです。チップ型設定が使えなかったため、通常のプルダウンを設定しました。');
+          return record;
+        } catch (error) {
+          if (error.status === 401 || error.status === 403) throw error;
+          if (error.status && error.status !== 404) throw error;
+          // Only a definite missing-file response allows replacement creation.
+          // Temporary/network/API errors must not silently create duplicate spreadsheets.
+          if (error.status !== 404) throw error;
+          console.warn('Cached schedule spreadsheet was not found; creating a replacement.', error);
+          record = null;
+        }
+      }
+
+      const created = await scheduleApiJson(SHEETS_API, token, {
+        method: 'POST',
+        body: {
+          properties: { title: SCHEDULE_SPREADSHEET_TITLE },
+          sheets: [{ properties: { title: '予定', gridProperties: { rowCount: 200, columnCount: 26 } } }]
+        }
+      });
+      if (!created.spreadsheetId) throw new Error('Googleから新しいスプレッドシートIDが返されませんでした。');
+      record = {
+        spreadsheetId: created.spreadsheetId,
+        url: created.spreadsheetUrl || ('https://docs.google.com/spreadsheets/d/' + created.spreadsheetId + '/edit'),
+        createdAt: Date.now()
+      };
+      // Save ID before formatting so a retry will reuse the same spreadsheet.
+      saveScheduleSheetRecord(email, record);
+      const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+      record.chipDropdownApplied = chipDropdownApplied;
+      saveScheduleSheetRecord(email, record);
+      renderScheduleSheetNotice(record, chipDropdownApplied
+        ? '今日の予定スプレッドシートを自動作成しました。チップ型プルダウンを設定しました。'
+        : '今日の予定スプレッドシートを自動作成しました。予定データは保存済みですが、チップ型設定に失敗したため通常のプルダウンを設定しました。');
+      return record;
+    })();
+    try {
+      return await scheduleCreationPromise;
+    } finally {
+      scheduleCreationPromise = null;
+    }
   }
 
   function renderScheduleSheetNotice(record, message) {
@@ -425,9 +540,13 @@
 
   window.addEventListener('pc-auth-changed', event => {
     if (event && event.detail && event.detail.signedIn) {
-      // Wait until the OAuth access token is available; the ID-token-only state is insufficient.
       const auth = window.PC_AUTH;
-      if (auth && auth.getAccessToken && auth.getAccessToken()) autoCreateScheduleSpreadsheet();
+      if (auth && auth.getAccessToken && auth.getAccessToken()) {
+        autoCreateScheduleSpreadsheet().catch(error => {
+          renderScheduleSheetNotice(null, '今日の予定スプレッドシートを自動作成できませんでした。' + (error.message || '不明なエラー'));
+          console.error('Schedule spreadsheet auto-create failed', error);
+        });
+      }
     }
   });
 
