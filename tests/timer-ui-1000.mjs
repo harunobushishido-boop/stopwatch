@@ -46,7 +46,7 @@ try{
     if(cycle>1) await page.locator('button.clk-controls__btn[aria-label="タイマー"]').click({force:true});
 
     // create
-    await preset.click({force:true});completed++;
+    await preset.evaluate(el=>el.click());completed++;
     const circle=page.locator('.clk-timer-circle');
     await circle.waitFor({state:'visible',timeout:2000});
     await page.locator('.clk-panel__close').evaluate(el=>el.click());
