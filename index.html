@@ -528,7 +528,7 @@ const bg=$('.clk-bg'),bgA=panes[3],bgB=$('#bgB');let fgAuto=true,bgObjectUrl='',
 const lum=c=>{let r,g,b,m=String(c).trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);if(m){let h=m[1];if(h.length===3)h=[...h].map(x=>x+x).join('');r=parseInt(h.slice(0,2),16);g=parseInt(h.slice(2,4),16);b=parseInt(h.slice(4,6),16)}else{m=String(c).match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);if(!m)return .5;r=+m[1];g=+m[2];b=+m[3]}const f=x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4};return .2126*f(r)+.7152*f(g)+.0722*f(b)};
 const autoFgButton=$('.clk-color-swatch--auto',sp),fgCss=document.createElement('style');fgCss.textContent='.clk-shell--auto-media .clk-time,.clk-shell--auto-media .clk-time__seconds,.clk-shell--auto-media .clk-date,.clk-shell--auto-media .clk-timer-circle__center,.clk-shell--auto-media .clk-sw-stage__time,.clk-shell--auto-media .clk-row{ text-shadow:0 1px 8px var(--clk-fg-shadow,rgba(0,0,0,.55)) }';document.head.appendChild(fgCss);
 function setForeground(color,automatic,selected){if(!color)return;fgAuto=!!automatic;shell.style.setProperty('--clk-fg',color);shell.style.setProperty('--clk-fg-base',color);const dark=color.toLowerCase()==='#ffffff'||color.toLowerCase()==='rgb(255, 255, 255)';shell.style.setProperty('--clk-fg-shadow',dark?'rgba(0,0,0,.72)':'rgba(255,255,255,.88)');$$('.clk-color-swatch',sp).forEach(b=>{const on=b===selected;b.classList.toggle('clk-color-swatch--active',on);b.setAttribute('aria-checked',String(on))})}
-function autoForeground(l,media=false){const white=1.05/(l+.05),dark=(l+.05)/.05,color=white>=dark?'#FFFFFF':'#172033';setForeground(color,true,autoFgButton);shell.classList.toggle('clk-shell--light',l>.5);shell.classList.toggle('clk-shell--auto-media',media);let overlay=$('.clk-bg-overlay',bg);if(media){if(!overlay){overlay=document.createElement('div');overlay.className='clk-bg-overlay';overlay.setAttribute('aria-hidden','true');bg.appendChild(overlay)}overlay.dataset.tone=white>=dark?'dark':'light'}else overlay?.remove()}
+function autoForeground(l,media=false){const white=1.05/(l+.05),dark=(l+.05)/.05,color=l>=.97?'#000000':white>=dark?'#FFFFFF':'#172033';setForeground(color,true,autoFgButton);shell.classList.toggle('clk-shell--light',l>.5);shell.classList.toggle('clk-shell--auto-media',media);let overlay=$('.clk-bg-overlay',bg);if(media){if(!overlay){overlay=document.createElement('div');overlay.className='clk-bg-overlay';overlay.setAttribute('aria-hidden','true');bg.appendChild(overlay)}overlay.dataset.tone=white>=dark?'dark':'light'}else overlay?.remove()}
 const canvas=document.createElement('canvas');canvas.width=canvas.height=32;const bgSampleCtx=canvas.getContext('2d',{willReadFrequently:true});
 function sampleMedia(media){try{const w=media.videoWidth||media.naturalWidth,h=media.videoHeight||media.naturalHeight;if(!w||!h||!bgSampleCtx)return false;bgSampleCtx.clearRect(0,0,32,32);bgSampleCtx.drawImage(media,0,0,32,32);const d=bgSampleCtx.getImageData(0,0,32,32).data;let total=0,n=0;const linear=v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4};for(let i=0;i<d.length;i+=4){if(d[i+3]<24)continue;const l=.2126*linear(d[i])+.7152*linear(d[i+1])+.0722*linear(d[i+2]);total+=l;n++}if(n)autoForeground(total/n,true);return !!n}catch{return false}}
 function stopMediaSampling(){clearInterval(mediaContrastTimer);mediaContrastTimer=0}
@@ -536,8 +536,37 @@ function clearMedia(){stopMediaSampling();bg.querySelectorAll('video,img,.clk-bg
 function applyAutoForeground(){const media=bg.querySelector('video,img');if(media){sampleMedia(media);return}const color=getComputedStyle(shell).getPropertyValue('--clk-bg').trim()||getComputedStyle(bg.querySelector('.clk-bg-palette')).backgroundColor;autoForeground(lum(color),false)}
 function installBackground(file){if(!file)return false;const isVideo=/^video\//i.test(file.type)||/\.(mp4|webm|mov|m4v)$/i.test(file.name||''),isImage=/^image\//i.test(file.type)||/\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.name||'');if(!isImage&&!isVideo){toast('画像または動画ファイルを選んでください。');return false}const limit=(isVideo?100:20)*1024*1024;if(file.size>limit){toast(isVideo?'動画は100MB以下のファイルを選んでください。':'画像は20MB以下のファイルを選んでください。');return false}clearMedia();const media=document.createElement(isVideo?'video':'img');bgObjectUrl=URL.createObjectURL(file);media.src=bgObjectUrl;media.className=isVideo?'clk-bg-video':'clk-bg-image';media.style.cssText='position:absolute!important;inset:0!important;z-index:1!important;width:100%!important;height:100%!important;object-fit:cover!important;display:block!important';if(isVideo){media.autoplay=true;media.loop=true;media.muted=true;media.defaultMuted=true;media.playsInline=true;media.setAttribute('muted','');media.setAttribute('playsinline','');media.setAttribute('autoplay','');media.preload='auto';media.controls=false;media.addEventListener('loadedmetadata',()=>{sampleMedia(media);media.play().catch(()=>{})},{once:true});media.addEventListener('canplay',()=>media.play().catch(()=>{}),{once:true});media.addEventListener('error',()=>toast('この動画形式は再生できません。MP4またはWebMをお試しください。'),{once:true})}else media.addEventListener('load',()=>sampleMedia(media),{once:true});bg.appendChild(media);shell.classList.add('clk-shell--media');autoForeground(lum(getComputedStyle(shell).getPropertyValue('--clk-bg')),true);if(isVideo){stopMediaSampling();mediaContrastTimer=setInterval(()=>{if(fgAuto&&!document.hidden&&media.isConnected)sampleMedia(media)},3000);media.play().catch(()=>{})}else if(media.complete)sampleMedia(media);const label=$('.clk-bg-thumb__label',bgB);if(label)label.textContent=file.name;const clear=$('#clkBgClear',bgB);if(clear)clear.hidden=false;window.__clkSaveTheme?.();return true}
 $$('.clk-color-swatch:not(.clk-color-swatch--custom)',sp).forEach(b=>b.addEventListener('click',()=>{if(b.matches('.clk-color-swatch--auto')){fgAuto=true;applyAutoForeground();$$('.clk-color-swatch',sp).forEach(x=>{const on=x===autoFgButton;x.classList.toggle('clk-color-swatch--active',on);x.setAttribute('aria-checked',String(on))});return}const dot=$('.clk-color-swatch__dot',b),color=dot?.style.backgroundColor||b.getAttribute('aria-label')||b.title;setForeground(color,false,b);shell.classList.remove('clk-shell--auto-media');$('.clk-bg-overlay',bg)?.remove()}));
-$('.clk-color-swatch__input').oninput=e=>{setForeground(e.target.value,false,e.target.closest('.clk-color-swatch--custom'));shell.classList.remove('clk-shell--auto-media');$('.clk-bg-overlay',bg)?.remove()};
-const pm=$$('.clk-palette-mini:not(.clk-palette-mini--special)',bgA),ci=document.createElement('input');ci.type='color';ci.value='#222222';ci.setAttribute('aria-label','カスタム背景色');ci.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';bgA.appendChild(ci);
+$('.clk-color-swatch__input').oninput=e=>{setForeground(e.target.value,false,e.target.closest('.clk-color-swatch--custom'));shell.classList.remove('clk-shell--auto-media');$('.clk-bg-overlay',bg)?.remove();window.__clkSaveTheme?.()};
+const pm=$('.clk-palette-mini:not(.clk-palette-mini--special)',bgA),ci=document.createElement('input');ci.type='color';ci.value='#222222';ci.setAttribute('aria-label','カスタム背景色');ci.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';bgA.appendChild(ci);
+function pal(backgroundColor,foregroundColor,accentColor){
+ const bgColor=backgroundColor||'#F4EFE3';
+ const brightness=lum(bgColor);
+ bgApi.clearMedia();
+ shell.style.setProperty('--clk-bg',bgColor);
+ shell.style.setProperty('--clk-bg-base',bgColor);
+ const accent=accentColor||getComputedStyle(shell).getPropertyValue('--clk-accent').trim()||'#F59E0B';
+ shell.style.setProperty('--clk-accent',accent);
+ shell.style.setProperty('--clk-accent-base',accent);
+ const paletteSurface=$('.clk-bg-palette',bg);
+ if(paletteSurface)paletteSurface.style.backgroundColor=bgColor;
+ // Pure white uses black text; the other palettes retain their paired foreground color.
+ const fg=brightness>=.97?'#000000':(foregroundColor||(brightness>.5?'#1F2937':'#F5EFE6'));
+ setForeground(fg,false,null);
+ shell.classList.toggle('clk-shell--light',brightness>.5);
+ shell.classList.remove('clk-shell--auto-media');
+ $('.clk-bg-overlay',bg)?.remove();
+ pm.forEach(button=>{
+   const active=button.style.backgroundColor===bgColor;
+   button.classList.toggle('clk-palette-mini--active',active);
+   button.setAttribute('aria-pressed',String(active));
+ });
+ $('.clk-palette-mini--special',bgA).forEach(button=>{
+   button.classList.remove('clk-palette-mini--active');
+   button.setAttribute('aria-pressed','false');
+ });
+ try{localStorage.removeItem('pc-bg-preset-v1')}catch(e){}
+ window.__clkSaveTheme?.();
+}
 pm.forEach(b=>b.addEventListener('click',()=>pal(b.style.backgroundColor,$('.clk-palette-mini__sample',b).style.color,$('.clk-palette-mini__accent',b).style.backgroundColor)));
 $$('.clk-palette-mini--special',bgA).forEach(b=>b.addEventListener('click',()=>{if(/ランダム/.test(b.textContent))pm[Math.floor(Math.random()*pm.length)].click();else ci.click()}));
 ci.oninput=()=>{const c=ci.value,r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);pal(`rgb(${r},${g},${b})`,lum(c)>.5?'#1F2937':'#F5EFE6')};
@@ -634,8 +663,8 @@ async function wx(lat,lon,name){
  const call=++wxRequest;wxBusy=true;if(rbt)rbt.textContent='更新中…';wxRefresh?.setAttribute('aria-busy','true');
  try{
   if(!Number.isFinite(lat)||lat<-90||lat>90||!Number.isFinite(lon)||lon<-180||lon>180)throw new Error('緯度・経度が正しくありません');
-  if(!window.__weatherFallback?.getJmaForecast)throw new Error('気象庁の予報モジュールを読み込めませんでした');
-  const forecast=await window.__weatherFallback.getJmaForecast(lat,lon,name);
+  if(!window.__weatherFallback?.getForecast)throw new Error('天気予報モジュールを読み込めませんでした');
+  const forecast=await window.__weatherFallback.getForecast(lat,lon,name,window.__weatherFallback.getSelectedProvider?.());
   if(!Array.isArray(forecast)||!forecast[0]?.timeSeries)throw new Error('気象庁の予報データ形式が正しくありません');
   if(call!==wxRequest)return;
   const short=forecast[0],weekly=forecast.find((x,i)=>i>0&&Array.isArray(x.timeSeries)&&x.timeSeries.length>0)||forecast[forecast.length-1];
@@ -687,7 +716,7 @@ async function wx(lat,lon,name){
     const savedAt=forecast.__stale&&forecast.__fetchedAt?'／保存日時：'+new Date(forecast.__fetchedAt).toLocaleString('ja-JP',{hour12:false})+'（保存済みデータ）':'';
     const observation=forecast.__observation;
     const observationNote=observation?'現在の観測：気象庁アメダス・'+(observation.stationName||'最寄り観測所')+(Number.isFinite(Number(observation.distanceKm))?'（約'+observation.distanceKm.toFixed(1)+'km）':'')+(observation.time?' '+observation.time.slice(0,16).replace('T',' '):'')+'／':'';
-    source.textContent=observationNote+'天気・時間帯予報・週間予報：気象庁'+savedAt+'。学校敷地そのものの観測値ではありません。';
+    source.textContent=observationNote+'天気・時間帯予報・週間予報：'+(forecast.__source||'Open-Meteo')+savedAt+'。富沢小学校周辺の座標を使用し、学校敷地そのものの観測値ではありません。';
   }
   $$('.clk-weather-inline').forEach(b=>{b.querySelector('.clk-weather-inline__icon').innerHTML='<span>'+currentWeather[1]+'</span>';b.querySelector('.clk-weather-inline__temp').textContent=current.temp!==''&&Number.isFinite(Number(current.temp))?Math.round(Number(current.temp))+'°':'—';b.title=b.ariaLabel='天気予報を開く — '+name;b.onclick=e=>{e.stopPropagation();open(4)};b.style.display=S.wxi?'':'none'});
   W={lat,lon,name};wp.dataset.weatherLat=String(lat);wp.dataset.weatherLon=String(lon);wp.dataset.weatherName=name;lastWxUpdate=Date.now();if(rbt)rbt.textContent='更新したばかり';wxRefresh?.setAttribute('aria-busy','false');
