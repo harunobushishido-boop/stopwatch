@@ -199,7 +199,7 @@
     }
     testButton.disabled = true;
     testButton.textContent = '今日の予定を読み取り中…';
-    setStatus('今日の予定と持ち物を読み取っています。');
+    setStatus('明日の持ち物を読み取っています。');
     if (testOutput) testOutput.replaceChildren();
 
     try {
@@ -208,7 +208,7 @@
       const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
       const values = Array.isArray(data.values) ? data.values : [];
       const visibleRows = values.filter(row => (row || []).some(cell => String(cell == null ? '' : cell).trim()));
-      renderPackingTest([{ title: '今日の予定', values: visibleRows }]);
+      renderPackingTest([{ title: '明日の持ち物', values: visibleRows }]);
 
       const row = values[1] || [];
       if (!row.some(cell => String(cell == null ? '' : cell).trim())) {
@@ -225,19 +225,19 @@
         throw new Error('音声発表機能がまだ準備できていません。ページを再読み込みして再試行してください。');
       }
       const announcement = buildText(row, classes);
-      setStatus('今日の予定を音声で発表しています…');
+      setStatus('明日の持ち物を音声で発表しています…');
       const played = await speak(announcement);
       if (!played) {
         throw new Error('予定は読み取れましたが、音声を再生できませんでした。ブラウザーの音量とネット接続を確認してください。');
       }
-      setStatus('成功：今日の授業時間数・予定・持ち物を音声で発表しました。');
+      setStatus('成功：明日の持ち物を音声で発表しました。');
     } catch (error) {
-      setError('今日の予定の読み取り・発表に失敗しました。' + (error.message || '不明なエラー'));
+      setError('明日の持ち物の読み取り・発表に失敗しました。' + (error.message || '不明なエラー'));
       setStatus('テストに失敗しました');
       console.error('Today schedule announcement test failed', error);
     } finally {
       testButton.disabled = false;
-      testButton.textContent = '持ち物テスト（今日の予定を発表）';
+      testButton.textContent = '持ち物テスト（明日の持ち物を発表）';
     }
   }
 
@@ -323,7 +323,7 @@
     const oldData = await requestJson(base + '/values/' + encodeURIComponent("'予定'!A1:Z200"));
     const oldValues = Array.isArray(oldData.values) ? oldData.values : [];
     const oldHeader = (oldValues[0] || []).map(value => String(value == null ? '' : value).trim());
-    const newHeader = ['授業時間数', '区分（通常/特別）', '特別の記入', '今日の予定・持ち物', '発表文'];
+    const newHeader = ['授業時間数', '区分（通常/特別）', '特別の記入', '明日の持ち物', '追加のお知らせ'];
     const today = currentTokyoDateKey();
     let todayRow = ['', '', '', '', ''];
 
@@ -336,8 +336,8 @@
     const classCol = findHeader([value => value === '授業時間数'], dateColumn >= 0 ? 1 : 0);
     const kindCol = findHeader([value => value === '区分（通常/特別）' || value === '区分' || value === '特別'], dateColumn >= 0 ? 2 : 1);
     const specialCol = findHeader([value => value === '特別の記入'], dateColumn >= 0 ? 3 : 2);
-    const planCol = findHeader([value => value === '今日の予定・持ち物' || value === '予定' || value === '持ち物'], dateColumn >= 0 ? 4 : 3);
-    const textCol = findHeader([value => value === '発表文'], dateColumn >= 0 ? 5 : 4);
+    const planCol = findHeader([value => value === '明日の持ち物' || value === '今日の予定・持ち物' || value === '予定' || value === '持ち物'], dateColumn >= 0 ? 4 : 3);
+    const textCol = findHeader([value => value === '追加のお知らせ' || value === '発表文'], dateColumn >= 0 ? 5 : 4);
 
     if (dateColumn >= 0) {
       // 以前の日付別シートは「今日」に一致する行だけを引き継ぐ。
@@ -603,7 +603,7 @@
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:10px';
     connectButton = makeButton('今日の予定シートを確認', true);
-    testButton = makeButton('持ち物テスト（今日の予定を発表）', true);
+    testButton = makeButton('持ち物テスト（明日の持ち物を発表）', true);
     actions.append(connectButton, testButton);
     testOutput = document.createElement('div');
     testOutput.id = 'pcPackingTestOutput';
