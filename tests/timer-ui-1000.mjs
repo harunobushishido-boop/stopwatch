@@ -49,7 +49,7 @@ try{
     await preset.click({force:true});completed++;
     const circle=page.locator('.clk-timer-circle');
     await circle.waitFor({state:'visible',timeout:2000});
-    await page.locator('.clk-panel__close').click({force:true});
+    await page.locator('.clk-panel__close').evaluate(el=>el.click());
     await page.waitForFunction(() => {
       const backdrop=document.querySelector('.clk-backdrop');
       return !backdrop || getComputedStyle(backdrop).visibility==='hidden';
