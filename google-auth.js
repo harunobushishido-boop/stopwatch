@@ -272,11 +272,11 @@
               setError(error && error.message || 'Googleの認証画面を開けませんでした。');
             }
           });
-          tokenClient.requestAccessToken({
-            // Don't force a new consent dialog each visit; Google remembers previously granted scopes.
-            prompt: currentUser ? '' : 'select_account',
-            login_hint: currentUser && currentUser.email ? currentUser.email : undefined
-          });
+          const tokenRequest = {};
+          // Reuse the remembered Google account when possible, without forcing consent every visit.
+          if (currentUser && currentUser.email) tokenRequest.login_hint = currentUser.email;
+          else tokenRequest.prompt = 'select_account';
+          tokenClient.requestAccessToken(tokenRequest);
         } catch (error) {
           button.disabled = false;
           button.textContent = currentUser ? 'Googleへのアクセスを再許可' : 'Googleアカウントでログインしてアクセスを許可';
