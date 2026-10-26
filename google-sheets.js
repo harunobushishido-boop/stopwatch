@@ -57,7 +57,7 @@
       if (!token || !expiry || Date.now() >= expiry) {
         setError('');
         setStatus('Googleの保存済みアクセス許可を確認しています。自動接続できない場合はGoogleアカウント欄の「再接続」を押してください。');
-        const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
+        const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(true);
         if (!requested && !(typeof window.__pcGoogleAccessIsPending === 'function' && window.__pcGoogleAccessIsPending())) setError('Google接続を開始できませんでした。Googleアカウント欄の「Googleへのアクセスを再接続」を押してください。');
         return;
       }
@@ -177,7 +177,7 @@
     if (!token || !expiry || Date.now() >= expiry) {
       setError('');
       setStatus('Google接続を確認しています。接続後に、もう一度「持ち物テスト」を押してください。');
-      const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(false);
+      const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(true);
       if (!requested && !(typeof window.__pcGoogleAccessIsPending === 'function' && window.__pcGoogleAccessIsPending())) setError('Google接続を開始できませんでした。Googleアカウント欄の「Googleへのアクセスを再接続」を押してください。');
       return;
     }
