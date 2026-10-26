@@ -185,7 +185,7 @@
     accessToken = token;
     tokenExpiresAt = expiry;
     try {
-      if (!record || !record.spreadsheetId) record = await autoCreateScheduleSpreadsheet();
+      record = await autoCreateScheduleSpreadsheet();
     } catch (error) {
       setError('明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
       setStatus('作成に失敗しました');
