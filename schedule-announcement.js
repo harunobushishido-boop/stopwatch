@@ -485,8 +485,8 @@
       checkAnnouncement(true);
     }
   });
-  const observer = new MutationObserver(() => { if (!statusNode) installStatus(); });
+  // Install once when the DOM is ready. Authentication changes also retry the status UI.
+  // Do not observe every mutation in the entire app; that can repeatedly schedule work.
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
-  observer.observe(document.documentElement, { childList: true, subtree: true });
 })();
