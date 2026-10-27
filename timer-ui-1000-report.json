@@ -1,7 +1,7 @@
 {
   "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 5,
+  "completed_operations": 2,
   "features": {
     "timer_stop": true,
     "timer_reset": true,
@@ -9,7 +9,9 @@
     "alarm_stop_code": true,
     "history_best_code": true
   },
-  "browser_errors": [],
-  "failure": "locator.click: Element is outside of the viewport\nCall log:\n  - waiting for locator('.clk-preset-btn[aria-label=\"開始 1\"]').first()\n    - locator resolved to <button type=\"button\" aria-label=\"開始 1\" class=\"clk-preset-btn\">…</button>\n  - attempting click action\n    - scrolling into view if needed\n    - done scrolling\n\n    at /home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:49:18",
-  "timestamp": "2026-10-26T11:43:52.830Z"
+  "browser_errors": [
+    "pageerror: autoCreateScheduleSpreadsheet is not defined"
+  ],
+  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:62:12",
+  "timestamp": "2026-10-27T12:46:37.022Z"
 }
