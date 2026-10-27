@@ -210,8 +210,8 @@
       record = await autoCreateScheduleSpreadsheet();
     } catch (error) {
       setError('明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
-      setStatus('作成に失敗しました。下の入力欄でCSV・Excelを書き出せます。');
-      if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。入力欄に記入し、CSVまたはExcelで書き出してください。';
+      setStatus('自動作成に失敗しました。下の入力欄から手動保存・音声発表できます。接続用テンプレートも書き出せます。');
+      if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。入力欄から手動保存・音声発表できます。CSV・Excelボタンは接続用テンプレートです。';
       console.error('Schedule spreadsheet auto-create failed', error);
       return;
     }
@@ -752,7 +752,7 @@
     ];
     const bytes = buildStoredZip(files);
     downloadScheduleFile(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), '明日の持ち物-' + scheduleDateStamp() + '.xlsx');
-    if (exportStatusNode) exportStatusNode.textContent = 'Excelファイルを保存しました。Googleスプレッドシートで「ファイル → インポート → アップロード」から読み込めます。';
+    if (exportStatusNode) exportStatusNode.textContent = 'Excelテンプレートを保存しました。Googleスプレッドシートの「ファイル → インポート → アップロード」から見出しと入力行を取り込めます。';
   }
 
   function sheetIdFromUrl(value) {
@@ -810,11 +810,11 @@
       const saved = await readAndCacheScheduleRows(record, token);
       renderScheduleSheetNotice(record, '共有スプレッドシートに接続しました。ここから編集・音声発表を利用できます。');
       setStatus('共有スプレッドシートに接続しました。');
-      if (exportStatusNode) exportStatusNode.textContent = '共有シートの予定を読み込みました。CSV・Excelにも書き出せます。';
+      if (exportStatusNode) exportStatusNode.textContent = '共有シートの予定を読み込みました。フォームで編集して保存するとA2:F2へ反映されます。CSV・Excelテンプレートも利用できます。';
       try { localStorage.removeItem(SHARED_PENDING_KEY); } catch (error) {}
     } catch (error) {
       setError('共有シートに接続できませんでした。リンクの共有権限とGoogleのアクセス許可を確認してください。' + (error.message ? ' 詳細: ' + error.message : ''));
-      setStatus('共有シート未接続。CSV・Excel出力は引き続き使えます。');
+      setStatus('共有シート未接続です。端末への手動保存と即時音声発表は使えます。CSV・Excelは接続用テンプレートです。');
     } finally {
       if (sharedConnectButton) {
         sharedConnectButton.disabled = false;
@@ -838,7 +838,7 @@
           try { await readAndCacheScheduleRows(record, auth.getAccessToken()); } catch (readError) {}
         }).catch(error => {
           renderScheduleSheetNotice(null, '明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
-          if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。下の入力欄からCSV・Excelを書き出せます。';
+          if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。下の入力欄から手動保存・音声発表できます。CSV・Excelは接続用テンプレートです。';
           console.error('Schedule spreadsheet auto-create failed', error);
         });
       }
@@ -901,7 +901,7 @@
     const sharedNote = document.createElement('p');
     sharedNote.className = 'clk-group__hint';
     sharedNote.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
-    sharedNote.textContent = 'Googleにログインし、リンク先シートへの編集権限があるアカウントで接続してください。接続できない場合も、下のCSV・Excel出力は使えます。';
+    sharedNote.textContent = 'Googleにログインし、リンク先シートへの編集権限があるアカウントで接続してください。接続できなくても端末への保存と即時音声発表は使えます。CSV・Excelボタンは空の接続用テンプレートです。';
     sharedConnectButton.addEventListener('click', connectSharedSpreadsheet);
     sharedSection.append(sharedLabel, sharedActions, sharedNote);
 
@@ -955,7 +955,7 @@
     exportStatusNode = document.createElement('p');
     exportStatusNode.className = 'clk-group__hint';
     exportStatusNode.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
-    exportStatusNode.textContent = '入力内容はこの端末に保存されます。CSV・ExcelはGoogleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
+    exportStatusNode.textContent = '入力した予定はこの端末に保存され、接続済みシートがあれば「入力内容を保存」でA2:F2へ反映します。CSV・Excelボタンは空の接続用テンプレートです。';
     fallbackEditor.append(manualActions, exportActions, exportStatusNode);
 
     group.append(title, note, statusNode, errorNode, actions, testOutput, sharedSection, fallbackEditor, guide, foot);
