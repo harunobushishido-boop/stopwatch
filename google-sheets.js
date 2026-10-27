@@ -4,7 +4,7 @@
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
   let accessToken = '';
   let tokenExpiresAt = 0;
-  let statusNode, errorNode, connectButton, testButton, testOutput;
+  let statusNode, errorNode, connectButton, testButton, testOutput, manualSaveButton, manualAnnounceButton;
 
   function activeScheduleRecord() {
     const email = String(window.PC_AUTH && window.PC_AUTH.currentUser && window.PC_AUTH.currentUser.email || '').trim().toLowerCase();
@@ -42,6 +42,27 @@
     if (!response.ok) {
       if (response.status === 401) accessToken = '';
       throw new Error(data && data.error && data.error.message || ('Google Sheets APIエラー（HTTP ' + response.status + '）'));
+    }
+    return data || {};
+  }
+
+  async function scheduleApiJson(url, token, options = {}) {
+    const bearer = String(token || accessToken || '').trim();
+    if (!bearer) throw new Error('Googleのアクセス許可がありません。Googleアカウントでログインしてください。');
+    const response = await fetch(url, {
+      method: options.method || 'GET',
+      headers: Object.assign({ Authorization: 'Bearer ' + bearer }, options.body ? { 'Content-Type': 'application/json' } : {}),
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      cache: 'no-store'
+    });
+    let data = null;
+    try { data = await response.json(); } catch (error) {}
+    if (!response.ok) {
+      const message = data && data.error && data.error.message;
+      if (response.status === 403) {
+        throw new Error('Googleのアクセス許可が不足しているか、スプレッドシートAPIへのアクセスが拒否されました。Googleログインの許可を確認してください。' + (message ? ' 詳細: ' + message : ''));
+      }
+      throw new Error(message || ('Google Sheets APIエラー（HTTP ' + response.status + '）'));
     }
     return data || {};
   }
@@ -512,8 +533,76 @@
 
   function storeCurrentScheduleRows(showMessage) {
     const rows = cacheScheduleRows(currentScheduleRows());
-    if (exportStatusNode && showMessage) exportStatusNode.textContent = '入力内容をこの端末に保存しました。CSV・Excelで書き出せます。';
+    if (exportStatusNode && showMessage) exportStatusNode.textContent = '入力内容をこの端末に保存しました。';
     return rows;
+  }
+
+  async function saveManualSchedule(showMessage = true) {
+    const rows = storeCurrentScheduleRows(false);
+    const row = rows[1] || ['', '通常', '', '', '', ''];
+    const auth = window.PC_AUTH;
+    const token = auth && auth.getAccessToken && auth.getAccessToken();
+    const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+    const record = activeScheduleRecord();
+    if (record && record.spreadsheetId && token && expiry && Date.now() < expiry) {
+      accessToken = token;
+      tokenExpiresAt = expiry;
+      try {
+        await ensureScheduleSpreadsheetLayout(record, token);
+        const range = encodeURIComponent("'予定'!A2:F2");
+        await apiRequest(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + range + '?valueInputOption=USER_ENTERED', {
+          method: 'PUT',
+          body: { values: [row] }
+        });
+        if (exportStatusNode && showMessage) exportStatusNode.textContent = '入力内容をこの端末と接続済みGoogleスプレッドシートに保存しました。';
+        setStatus('入力内容をGoogleスプレッドシートに保存しました。自動音声発表にも使われます。');
+        return { rows, synced: true };
+      } catch (error) {
+        if (exportStatusNode && showMessage) exportStatusNode.textContent = '端末には保存しましたが、Googleシートへの同期に失敗しました。接続状態を確認してください。詳細: ' + String(error && error.message || error);
+        setStatus('入力内容はこの端末に保存しました。Googleシートへの同期は未完了です。');
+        return { rows, synced: false, error };
+      }
+    }
+    if (exportStatusNode && showMessage) exportStatusNode.textContent = '入力内容をこの端末に保存しました。時刻に合わせた自動発表を使うにはGoogleシートへ接続してください。';
+    setStatus('入力内容をこの端末に保存しました。');
+    return { rows, synced: false };
+  }
+
+  async function announceManualSchedule() {
+    const rows = storeCurrentScheduleRows(false);
+    const row = rows[1] || [];
+    const items = String(row[3] == null ? '' : row[3]).trim();
+    if (!items) {
+      if (exportStatusNode) exportStatusNode.textContent = '「明日の持ち物」を入力してから音声発表を押してください。';
+      setError('明日の持ち物が入力されていません。');
+      if (manualFields.items) manualFields.items.focus();
+      return false;
+    }
+    setError('');
+    if (manualAnnounceButton) { manualAnnounceButton.disabled = true; manualAnnounceButton.textContent = '音声発表中…'; }
+    try {
+      const maker = window.PC_SCHEDULE_ANNOUNCEMENT_TEXT;
+      const message = typeof maker === 'function'
+        ? maker(row)
+        : '明日の持ち物は、' + items.replace(/[。．.!！?？]+$/, '') + 'です。' + (String(row[4] || '').trim() ? ' ' + String(row[4]).trim() : '');
+      const speak = window.PC_SCHEDULE_SPEAK;
+      if (typeof speak !== 'function') throw new Error('音声モジュールを読み込めませんでした。ページを再読み込みしてください。');
+      storeCurrentScheduleRows(false);
+      const syncPromise = saveManualSchedule(false);
+      if (exportStatusNode) exportStatusNode.textContent = '入力内容を音声で発表しています。Google接続中なら共有シートにも保存します。';
+      await speak(message);
+      syncPromise.then(result => {
+        if (exportStatusNode) exportStatusNode.textContent = result && result.synced
+          ? '音声発表が完了し、共有シートにも保存しました。'
+          : '音声発表が完了しました。入力内容はこの端末に保存されています。Googleシートへの同期状態は接続表示を確認してください。';
+      }).catch(() => {});
+      return true;
+    } catch (error) {
+      if (exportStatusNode) exportStatusNode.textContent = '音声を発表できませんでした。音量・ネット接続・音声APIを確認してください。詳細: ' + String(error && error.message || error);
+      return false;
+    } finally {
+      if (manualAnnounceButton) { manualAnnounceButton.disabled = false; manualAnnounceButton.textContent = '今すぐ音声で発表'; }
+    }
   }
 
   function fillManualFields(rows) {
@@ -555,10 +644,10 @@
   }
 
   function exportScheduleCsv() {
-    const rows = storeCurrentScheduleRows(false);
+    const rows = [SCHEDULE_EXPORT_HEADERS.slice(), ['', '通常', '', '', '', '']];
     const content = '\uFEFF' + rows.map(row => SCHEDULE_EXPORT_HEADERS.map((_, i) => csvCell(row[i])).join(',')).join('\r\n') + '\r\n';
-    downloadScheduleFile(new Blob([content], { type: 'text/csv;charset=utf-8' }), '明日の持ち物-' + scheduleDateStamp() + '.csv');
-    if (exportStatusNode) exportStatusNode.textContent = 'CSVを保存しました。Googleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
+    downloadScheduleFile(new Blob([content], { type: 'text/csv;charset=utf-8' }), '接続用スプレッドシートテンプレート-' + scheduleDateStamp() + '.csv');
+    if (exportStatusNode) exportStatusNode.textContent = '接続用CSVテンプレートを保存しました。Googleスプレッドシートの「ファイル → インポート → アップロード」から見出しと入力行を取り込めます。';
   }
 
   function xmlEscape(value) {
@@ -642,7 +731,7 @@
   }
 
   function exportScheduleXlsx() {
-    const rows = storeCurrentScheduleRows(false);
+    const rows = [SCHEDULE_EXPORT_HEADERS.slice(), ['', '通常', '', '', '', '']];
     const widths = [18, 24, 28, 42, 42, 34];
     const sheetRows = rows.map((row, r) => {
       const cells = SCHEDULE_EXPORT_HEADERS.map((_, c) => {
@@ -829,8 +918,8 @@
     const fallbackEditor = document.createElement('section');
     fallbackEditor.id = 'pcScheduleFallbackEditor';
     fallbackEditor.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:12px;min-width:0';
-    fallbackEditor.innerHTML = '<h3 style="font-size:14px;font-weight:700;margin:0 0 6px">自動作成できないときの入力・書き出し</h3>' +
-      '<p style="font-size:12px;line-height:1.65;opacity:.8;margin:0 0 10px">ここに入力した内容はこの端末に保存されます。Google接続に失敗してもCSV・Excelとして書き出し、Googleスプレッドシートへインポートできます。</p>' +
+    fallbackEditor.innerHTML = '<h3 style="font-size:14px;font-weight:700;margin:0 0 6px">予定を入力して保存・音声発表</h3>' +
+      '<p style="font-size:12px;line-height:1.65;opacity:.8;margin:0 0 10px">ここに入力した予定はこの端末に保存されます。Googleシートに接続済みなら保存時に共有シートのA2:F2へ反映します。「今すぐ音声で発表」から入力内容を読み上げられます。CSV・Excelは接続用の空テンプレートです。</p>' +
       '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0">' +
       '<label style="min-width:0;font-size:12px">授業時間数<select id="pcScheduleManualClasses" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option value="">選択</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>' +
       '<label style="min-width:0;font-size:12px">区分<select id="pcScheduleManualKind" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option>通常</option><option>特別</option></select></label>' +
@@ -849,10 +938,17 @@
     };
     Object.values(manualFields).forEach(field => { field.addEventListener('input', () => storeCurrentScheduleRows(false)); if (field.tagName === 'SELECT') field.addEventListener('change', () => storeCurrentScheduleRows(false)); });
     fillManualFields(getCachedScheduleRows());
+    const manualActions = document.createElement('div');
+    manualActions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
+    manualSaveButton = makeButton('入力内容を保存', true);
+    manualAnnounceButton = makeButton('今すぐ音声で発表', true);
+    manualActions.append(manualSaveButton, manualAnnounceButton);
+    manualSaveButton.addEventListener('click', () => saveManualSchedule(true));
+    manualAnnounceButton.addEventListener('click', announceManualSchedule);
     const exportActions = document.createElement('div');
     exportActions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
-    csvExportButton = makeButton('CSVを書き出す');
-    xlsxExportButton = makeButton('Excel（.xlsx）を書き出す');
+    csvExportButton = makeButton('接続用CSVテンプレート');
+    xlsxExportButton = makeButton('Excelテンプレート（.xlsx）');
     exportActions.append(csvExportButton, xlsxExportButton);
     csvExportButton.addEventListener('click', exportScheduleCsv);
     xlsxExportButton.addEventListener('click', exportScheduleXlsx);
@@ -860,7 +956,7 @@
     exportStatusNode.className = 'clk-group__hint';
     exportStatusNode.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
     exportStatusNode.textContent = '入力内容はこの端末に保存されます。CSV・ExcelはGoogleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
-    fallbackEditor.append(exportActions, exportStatusNode);
+    fallbackEditor.append(manualActions, exportActions, exportStatusNode);
 
     group.append(title, note, statusNode, errorNode, actions, testOutput, sharedSection, fallbackEditor, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
@@ -874,6 +970,8 @@
       connectSharedSpreadsheet,
       exportScheduleCsv,
       exportScheduleXlsx,
+      saveManualSchedule,
+      announceManualSchedule,
       ensureScheduleSpreadsheet: autoCreateScheduleSpreadsheet,
       get connected() { return Boolean(accessToken && Date.now() < tokenExpiresAt); }
     };

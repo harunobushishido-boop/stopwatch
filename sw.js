@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'benri-timer-v107';
+const CACHE_NAME = 'benri-timer-v108';
 const CACHE_PREFIX = 'benri-timer-';
 const APP_SHELL = [
   './',
