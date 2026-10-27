@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 32521,
+  "elapsed_ms": 32330,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -14,5 +14,5 @@
     "pageerror: autoCreateScheduleSpreadsheet is not defined"
   ],
   "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:98:14",
-  "timestamp": "2026-10-27T12:11:03.625Z"
+  "timestamp": "2026-10-27T12:12:45.064Z"
 }
