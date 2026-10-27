@@ -757,8 +757,9 @@
   });
 
   function installUI() {
+    document.getElementById('pcSheetsLoadingNotice')?.remove();
     const panes = [...document.querySelectorAll('.clk-panel__pane')];
-    const pane = panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
+    const pane = document.getElementById('pcSheetsSettingsPane') || panes.find((item) => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
     if (!pane || document.getElementById('pcGoogleSheetsGroup')) return;
 
     const group = document.createElement('section');
