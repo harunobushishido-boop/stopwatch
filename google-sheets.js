@@ -64,6 +64,7 @@
       accessToken = token;
       tokenExpiresAt = expiry;
       const record = await autoCreateScheduleSpreadsheet();
+      try { await readAndCacheScheduleRows(record, token); } catch (readError) { console.warn('Schedule values could not be cached for export.', readError); }
       setStatus('明日の持ち物シートに接続しました。');
       renderScheduleSheetNotice(record, '明日の持ち物シートに接続しました。');
     } catch (error) {
@@ -188,7 +189,8 @@
       record = await autoCreateScheduleSpreadsheet();
     } catch (error) {
       setError('明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
-      setStatus('作成に失敗しました');
+      setStatus('作成に失敗しました。下の入力欄でCSV・Excelを書き出せます。');
+      if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。入力欄に記入し、CSVまたはExcelで書き出してください。';
       console.error('Schedule spreadsheet auto-create failed', error);
       return;
     }
@@ -207,6 +209,8 @@
       const range = escapeSheetName('予定') + '!A1:F2';
       const data = await apiRequest(SHEETS_API + encodeURIComponent(id) + '/values/' + encodeURIComponent(range));
       const values = Array.isArray(data.values) ? data.values : [];
+      cacheScheduleRows([SCHEDULE_EXPORT_HEADERS.slice(), Array.isArray(values[1]) ? values[1] : ['', '', '', '', '', '']]);
+      fillManualFields(getCachedScheduleRows());
       const visibleRows = values.filter(row => (row || []).some(cell => String(cell == null ? '' : cell).trim()));
       renderPackingTest([{ title: '明日の持ち物', values: visibleRows }]);
 
@@ -458,6 +462,341 @@
     }
   }
 
+
+  const SHARED_SCHEDULE_URL = 'https://docs.google.com/spreadsheets/d/1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ/edit?usp=sharing';
+  const SHARED_SCHEDULE_ID = '1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ';
+  const SHARED_PENDING_KEY = 'pc-shared-schedule-pending-v1';
+  const SCHEDULE_EXPORT_CACHE_KEY = 'pc-schedule-export-rows-v1';
+  const SCHEDULE_EXPORT_HEADERS = [
+    '授業時間数', '区分（通常/特別）', '特別の記入',
+    '明日の持ち物', '追加のお知らせ', '1〜4時間授業の発表時刻（HH:mm）'
+  ];
+  let sharedUrlInput = null;
+  let sharedConnectButton = null;
+  let csvExportButton = null;
+  let xlsxExportButton = null;
+  let exportStatusNode = null;
+  let manualFields = {};
+
+  function cacheScheduleRows(rows) {
+    const row = Array.isArray(rows) ? rows[1] || [] : [];
+    const normalized = [SCHEDULE_EXPORT_HEADERS.slice(), SCHEDULE_EXPORT_HEADERS.map((_, i) => String(row[i] == null ? '' : row[i]))];
+    try { localStorage.setItem(SCHEDULE_EXPORT_CACHE_KEY, JSON.stringify(normalized)); } catch (error) {}
+    return normalized;
+  }
+
+  function getCachedScheduleRows() {
+    try {
+      const cached = JSON.parse(localStorage.getItem(SCHEDULE_EXPORT_CACHE_KEY) || 'null');
+      if (Array.isArray(cached)) {
+        const row = Array.isArray(cached[1]) ? cached[1] : (Array.isArray(cached[0]) ? cached[0] : []);
+        return [SCHEDULE_EXPORT_HEADERS.slice(), SCHEDULE_EXPORT_HEADERS.map((_, i) => String(row[i] == null ? '' : row[i]))];
+      }
+    } catch (error) {}
+    return [SCHEDULE_EXPORT_HEADERS.slice(), ['', '', '', '', '', '']];
+  }
+
+  function currentScheduleRows() {
+    if (manualFields.classes) {
+      return [SCHEDULE_EXPORT_HEADERS.slice(), [
+        manualFields.classes.value,
+        manualFields.kind.value,
+        manualFields.special.value,
+        manualFields.items.value,
+        manualFields.extra.value,
+        manualFields.time.value
+      ].map(value => String(value == null ? '' : value))];
+    }
+    return getCachedScheduleRows();
+  }
+
+  function storeCurrentScheduleRows(showMessage) {
+    const rows = cacheScheduleRows(currentScheduleRows());
+    if (exportStatusNode && showMessage) exportStatusNode.textContent = '入力内容をこの端末に保存しました。CSV・Excelで書き出せます。';
+    return rows;
+  }
+
+  function fillManualFields(rows) {
+    if (!manualFields.classes) return;
+    const row = Array.isArray(rows) ? (Array.isArray(rows[1]) ? rows[1] : rows[0] || []) : [];
+    manualFields.classes.value = String(row[0] == null ? '' : row[0]);
+    manualFields.kind.value = String(row[1] == null ? '' : row[1]) || '通常';
+    manualFields.special.value = String(row[2] == null ? '' : row[2]);
+    manualFields.items.value = String(row[3] == null ? '' : row[3]);
+    manualFields.extra.value = String(row[4] == null ? '' : row[4]);
+    manualFields.time.value = String(row[5] == null ? '' : row[5]);
+  }
+
+  function csvCell(value) {
+    let text = String(value == null ? '' : value);
+    if (/^[\t\r ]*[=+\-@]/.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  function downloadScheduleFile(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function scheduleDateStamp() {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).formatToParts(new Date());
+    const result = {};
+    parts.forEach(part => { result[part.type] = part.value; });
+    return result.year + result.month + result.day;
+  }
+
+  function exportScheduleCsv() {
+    const rows = storeCurrentScheduleRows(false);
+    const content = '\uFEFF' + rows.map(row => SCHEDULE_EXPORT_HEADERS.map((_, i) => csvCell(row[i])).join(',')).join('\r\n') + '\r\n';
+    downloadScheduleFile(new Blob([content], { type: 'text/csv;charset=utf-8' }), '明日の持ち物-' + scheduleDateStamp() + '.csv');
+    if (exportStatusNode) exportStatusNode.textContent = 'CSVを保存しました。Googleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
+  }
+
+  function xmlEscape(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  const zipCrcTable = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      table[n] = c >>> 0;
+    }
+    return table;
+  })();
+
+  function zipCrc32(bytes) {
+    let crc = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i++) crc = zipCrcTable[(crc ^ bytes[i]) & 255] ^ (crc >>> 8);
+    return (crc ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  // Create a tiny valid XLSX container using Store-mode ZIP, with no external JS dependency.
+  function buildStoredZip(files) {
+    const encoder = new TextEncoder();
+    const localParts = [], centralParts = [];
+    let localOffset = 0, centralSize = 0;
+    const now = new Date();
+    const dosTime = ((now.getHours() & 31) << 11) | ((now.getMinutes() & 63) << 5) | (Math.floor(now.getSeconds() / 2) & 31);
+    const dosDate = (((Math.max(1980, now.getFullYear()) - 1980) & 127) << 9) |
+      (((now.getMonth() + 1) & 15) << 5) | (now.getDate() & 31);
+    const u16 = (view, offset, value) => view.setUint16(offset, value, true);
+    const u32 = (view, offset, value) => view.setUint32(offset, value >>> 0, true);
+    files.forEach(file => {
+      const name = encoder.encode(file.name);
+      const data = encoder.encode(file.content);
+      const crc = zipCrc32(data);
+      const local = new Uint8Array(30 + name.length);
+      const lv = new DataView(local.buffer);
+      u32(lv, 0, 0x04034b50); u16(lv, 4, 20); u16(lv, 6, 0); u16(lv, 8, 0);
+      u16(lv, 10, dosTime); u16(lv, 12, dosDate); u32(lv, 14, crc);
+      u32(lv, 18, data.length); u32(lv, 22, data.length); u16(lv, 26, name.length); u16(lv, 28, 0);
+      local.set(name, 30);
+      localParts.push(local, data);
+      const central = new Uint8Array(46 + name.length);
+      const cv = new DataView(central.buffer);
+      u32(cv, 0, 0x02014b50); u16(cv, 4, 20); u16(cv, 6, 20); u16(cv, 8, 0); u16(cv, 10, 0);
+      u16(cv, 12, dosTime); u16(cv, 14, dosDate); u32(cv, 16, crc);
+      u32(cv, 20, data.length); u32(cv, 24, data.length); u16(cv, 28, name.length);
+      u16(cv, 30, 0); u16(cv, 32, 0); u16(cv, 34, 0); u16(cv, 36, 0);
+      u32(cv, 38, 0); u32(cv, 42, localOffset);
+      central.set(name, 46);
+      centralParts.push(central);
+      localOffset += local.length + data.length;
+      centralSize += central.length;
+    });
+    const end = new Uint8Array(22);
+    const ev = new DataView(end.buffer);
+    u32(ev, 0, 0x06054b50); u16(ev, 4, 0); u16(ev, 6, 0);
+    u16(ev, 8, files.length); u16(ev, 10, files.length); u32(ev, 12, centralSize);
+    u32(ev, 16, localOffset); u16(ev, 20, 0);
+    const chunks = [...localParts, ...centralParts, end];
+    const size = chunks.reduce((total, chunk) => total + chunk.length, 0);
+    const output = new Uint8Array(size);
+    let offset = 0;
+    chunks.forEach(chunk => { output.set(chunk, offset); offset += chunk.length; });
+    return output;
+  }
+
+  function exportScheduleXlsx() {
+    const rows = storeCurrentScheduleRows(false);
+    const widths = [18, 24, 28, 42, 42, 34];
+    const sheetRows = rows.map((row, r) => {
+      const cells = SCHEDULE_EXPORT_HEADERS.map((_, c) => {
+        const ref = columnName(c) + (r + 1);
+        const val = xmlEscape(row[c] == null ? '' : row[c]);
+        return '<c r="' + ref + '" t="inlineStr"' + (r === 0 ? ' s="1"' : '') + '><is><t xml:space="preserve">' + val + '</t></is></c>';
+      }).join('');
+      return '<row r="' + (r + 1) + '">' + cells + '</row>';
+    }).join('');
+    const cols = widths.map((width, i) => '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + width + '" customWidth="1"/>').join('');
+    const files = [
+      { name: '[Content_Types].xml', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>' },
+      { name: '_rels/.rels', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>' },
+      { name: 'xl/workbook.xml', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="予定" sheetId="1" r:id="rId1"/></sheets></workbook>' },
+      { name: 'xl/_rels/workbook.xml.rels', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>' },
+      { name: 'xl/styles.xml', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><color rgb="FF1F2937"/><name val="Yu Gothic"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDEBFA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>' },
+      { name: 'xl/worksheets/sheet1.xml', content: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>' + cols + '</cols><sheetData>' + sheetRows + '</sheetData><autoFilter ref="A1:F2"/></worksheet>' }
+    ];
+    const bytes = buildStoredZip(files);
+    downloadScheduleFile(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), '明日の持ち物-' + scheduleDateStamp() + '.xlsx');
+    if (exportStatusNode) exportStatusNode.textContent = 'Excelファイルを保存しました。Googleスプレッドシートで「ファイル → インポート → アップロード」から読み込めます。';
+  }
+
+  function sheetIdFromUrl(value) {
+    const match = String(value || '').trim().match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : '';
+  }
+
+  async function readAndCacheScheduleRows(record, token) {
+    const range = escapeSheetName('予定') + '!A1:F2';
+    const data = await scheduleApiJson(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + encodeURIComponent(range), token);
+    const values = Array.isArray(data.values) ? data.values : [];
+    const result = [SCHEDULE_EXPORT_HEADERS.slice(), Array.isArray(values[1]) ? values[1] : ['', '', '', '', '', '']];
+    const rows = cacheScheduleRows(result);
+    fillManualFields(rows);
+    return rows;
+  }
+
+  async function connectSharedSpreadsheet() {
+    setError('');
+    const url = String(sharedUrlInput && sharedUrlInput.value || SHARED_SCHEDULE_URL).trim();
+    const id = sheetIdFromUrl(url);
+    if (!id) {
+      setError('Googleスプレッドシートの共有URLを正しく入力してください。');
+      return;
+    }
+    const auth = window.PC_AUTH;
+    const token = auth && auth.getAccessToken && auth.getAccessToken();
+    const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+    if (!token || !expiry || Date.now() >= expiry) {
+      try { localStorage.setItem(SHARED_PENDING_KEY, url); } catch (error) {}
+      setStatus('共有スプレッドシートへの接続にはGoogleのアクセス許可が必要です。ログイン画面で許可した後、もう一度押してください。');
+      const requested = typeof window.__pcGoogleRequestAccess === 'function' && window.__pcGoogleRequestAccess(true);
+      if (!requested && !(typeof window.__pcGoogleAccessIsPending === 'function' && window.__pcGoogleAccessIsPending())) {
+        setError('Google接続を開始できませんでした。Googleアカウント欄の再接続を押してください。');
+      }
+      return;
+    }
+    accessToken = token;
+    tokenExpiresAt = expiry;
+    sharedConnectButton.disabled = true;
+    sharedConnectButton.textContent = '共有シートを確認中…';
+    try {
+      const meta = await scheduleApiJson(SHEETS_API + encodeURIComponent(id) + '?fields=spreadsheetId,spreadsheetUrl,sheets(properties(sheetId,title),tables(tableId,name,range))', token);
+      const record = {
+        spreadsheetId: id,
+        url: meta.spreadsheetUrl || url,
+        shared: true,
+        sharedUrl: url,
+        createdAt: Date.now()
+      };
+      saveScheduleSheetRecord(String(auth.currentUser.email).trim().toLowerCase(), record);
+      await ensureScheduleSpreadsheetLayout(record, token);
+      const saved = await readAndCacheScheduleRows(record, token);
+      renderScheduleSheetNotice(record, '共有スプレッドシートに接続しました。ここから編集・音声発表を利用できます。');
+      setStatus('共有スプレッドシートに接続しました。');
+      if (exportStatusNode) exportStatusNode.textContent = '共有シートの予定を読み込みました。CSV・Excelにも書き出せます。';
+      try { localStorage.removeItem(SHARED_PENDING_KEY); } catch (error) {}
+    } catch (error) {
+      setError('共有シートに接続できませんでした。リンクの共有権限とGoogleのアクセス許可を確認してください。' + (error.message ? ' 詳細: ' + error.message : ''));
+      setStatus('共有シート未接続。CSV・Excel出力は引き続き使えます。');
+    } finally {
+      if (sharedConnectButton) {
+        sharedConnectButton.disabled = false;
+        sharedConnectButton.textContent = '共有スプレッドシートに接続';
+      }
+    }
+  }
+
+  function buildManualEditor(host) {
+    const editor = document.createElement('section');
+    editor.id = 'pcScheduleFallbackEditor';
+    editor.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:12px;min-width:0';
+    editor.innerHTML = '<h3 style="font-size:14px;font-weight:700;margin:0 0 6px">自動作成できないときの入力・書き出し</h3>' +
+      '<p style="font-size:12px;line-height:1.65;opacity:.8;margin:0 0 10px">ここに入力した内容はこの端末に保存されます。Google接続に失敗してもCSV・Excelとして書き出し、Googleスプレッドシートへインポートできます。</p>' +
+      '<div class="pc-schedule-form-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0">' +
+      '<label style="min-width:0;font-size:12px">授業時間数<select id="pcScheduleManualClasses" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option value="">選択</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>' +
+      '<label style="min-width:0;font-size:12px">区分<select id="pcScheduleManualKind" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option>通常</option><option>特別</option></select></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">特別の記入<input id="pcScheduleManualSpecial" type="text" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">明日の持ち物<textarea id="pcScheduleManualItems" rows="2" style="display:block;box-sizing:border-box;width:100%;min-width:0;resize:vertical;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></textarea></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">追加のお知らせ<textarea id="pcScheduleManualExtra" rows="2" style="display:block;box-sizing:border-box;width:100%;min-width:0;resize:vertical;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></textarea></label>' +
+      '<label style="min-width:0;font-size:12px">1〜4時間授業の発表時刻<input id="pcScheduleManualTime" type="time" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></label>' +
+      '</div>';
+    host.appendChild(editor);
+    manualFields = {
+      classes: editor.querySelector('#pcScheduleManualClasses'),
+      kind: editor.querySelector('#pcScheduleManualKind'),
+      special: editor.querySelector('#pcScheduleManualSpecial'),
+      items: editor.querySelector('#pcScheduleManualItems'),
+      extra: editor.querySelector('#pcScheduleManualExtra'),
+      time: editor.querySelector('#pcScheduleManualTime')
+    };
+    Object.values(manualFields).forEach(field => field.addEventListener('input', () => storeCurrentScheduleRows(false)));
+    const cached = getCachedScheduleRows();
+    fillManualFields(cached);
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
+    csvExportButton = makeButton('CSVを書き出す');
+    xlsxExportButton = makeButton('Excel（.xlsx）を書き出す');
+    actions.append(csvExportButton, xlsxExportButton);
+    csvExportButton.addEventListener('click', exportScheduleCsv);
+    xlsxExportButton.addEventListener('click', exportScheduleXlsx);
+    exportStatusNode = document.createElement('p');
+    exportStatusNode.className = 'clk-group__hint';
+    exportStatusNode.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
+    exportStatusNode.textContent = '入力内容はこの端末に保存されます。CSV・ExcelはGoogleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
+    editor.append(actions, exportStatusNode);
+    return editor;
+  }
+
+  function buildSharedConnectUI(host) {
+    const section = document.createElement('section');
+    section.id = 'pcSharedScheduleConnect';
+    section.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:12px;min-width:0';
+    const label = document.createElement('label');
+    label.textContent = '共有スプレッドシートURL';
+    label.style.cssText = 'display:block;font-size:12px;font-weight:600';
+    sharedUrlInput = document.createElement('input');
+    sharedUrlInput.type = 'url';
+    sharedUrlInput.value = SHARED_SCHEDULE_URL;
+    sharedUrlInput.autocomplete = 'url';
+    sharedUrlInput.spellcheck = false;
+    sharedUrlInput.style.cssText = 'display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit;font-size:12px';
+    label.appendChild(sharedUrlInput);
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
+    sharedConnectButton = makeButton('共有スプレッドシートに接続', true);
+    const openLink = document.createElement('a');
+    openLink.href = SHARED_SCHEDULE_URL;
+    openLink.target = '_blank';
+    openLink.rel = 'noopener noreferrer';
+    openLink.textContent = '共有シートを開く';
+    openLink.style.cssText = 'display:inline-flex;align-items:center;border:1px solid currentColor;border-radius:10px;padding:9px 13px;color:inherit;text-decoration:none;font-size:13px;font-weight:600';
+    actions.append(sharedConnectButton, openLink);
+    const note = document.createElement('p');
+    note.className = 'clk-group__hint';
+    note.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
+    note.textContent = 'Googleにログインし、リンク先シートへの編集権限があるアカウントで接続してください。接続できない場合も、下のCSV・Excel出力は使えます。';
+    sharedConnectButton.addEventListener('click', connectSharedSpreadsheet);
+    section.append(label, actions, note);
+    host.appendChild(section);
+    return section;
+  }
+
+
   const SCHEDULE_SPREADSHEET_TITLE = '6年4組便利タイマー - 明日の持ち物';
 
   async function scheduleApiJson(url, token, options = {}) {
@@ -602,8 +941,18 @@
     if (event && event.detail && event.detail.signedIn) {
       const auth = window.PC_AUTH;
       if (auth && auth.getAccessToken && auth.getAccessToken()) {
-        autoCreateScheduleSpreadsheet().catch(error => {
+        let pendingShared = '';
+        try { pendingShared = localStorage.getItem(SHARED_PENDING_KEY) || ''; } catch (error) {}
+        if (pendingShared) {
+          if (sharedUrlInput) sharedUrlInput.value = pendingShared;
+          connectSharedSpreadsheet().catch(error => console.error('Shared spreadsheet connection failed', error));
+          return;
+        }
+        autoCreateScheduleSpreadsheet().then(async record => {
+          try { await readAndCacheScheduleRows(record, auth.getAccessToken()); } catch (readError) {}
+        }).catch(error => {
           renderScheduleSheetNotice(null, '明日の持ち物シートを自動作成できませんでした。' + (error.message || '不明なエラー'));
+          if (exportStatusNode) exportStatusNode.textContent = '自動作成に失敗しました。下の入力欄からCSV・Excelを書き出せます。';
           console.error('Schedule spreadsheet auto-create failed', error);
         });
       }
@@ -639,6 +988,36 @@
     testOutput = document.createElement('div');
     testOutput.id = 'pcPackingTestOutput';
     testOutput.style.cssText = 'margin-top:12px;min-width:0';
+    const sharedSection = document.createElement('section');
+    sharedSection.id = 'pcSharedScheduleConnect';
+    sharedSection.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:12px;min-width:0';
+    const sharedLabel = document.createElement('label');
+    sharedLabel.textContent = '共有スプレッドシートURL';
+    sharedLabel.style.cssText = 'display:block;font-size:12px;font-weight:600';
+    sharedUrlInput = document.createElement('input');
+    sharedUrlInput.type = 'url';
+    sharedUrlInput.value = SHARED_SCHEDULE_URL;
+    sharedUrlInput.autocomplete = 'url';
+    sharedUrlInput.spellcheck = false;
+    sharedUrlInput.style.cssText = 'display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit;font-size:12px';
+    sharedLabel.appendChild(sharedUrlInput);
+    const sharedActions = document.createElement('div');
+    sharedActions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
+    sharedConnectButton = makeButton('共有スプレッドシートに接続', true);
+    const sharedOpenLink = document.createElement('a');
+    sharedOpenLink.href = SHARED_SCHEDULE_URL;
+    sharedOpenLink.target = '_blank';
+    sharedOpenLink.rel = 'noopener noreferrer';
+    sharedOpenLink.textContent = '共有シートを開く';
+    sharedOpenLink.style.cssText = 'display:inline-flex;align-items:center;border:1px solid currentColor;border-radius:10px;padding:9px 13px;color:inherit;text-decoration:none;font-size:13px;font-weight:600';
+    sharedActions.append(sharedConnectButton, sharedOpenLink);
+    const sharedNote = document.createElement('p');
+    sharedNote.className = 'clk-group__hint';
+    sharedNote.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
+    sharedNote.textContent = 'Googleにログインし、リンク先シートへの編集権限があるアカウントで接続してください。接続できない場合も、下のCSV・Excel出力は使えます。';
+    sharedConnectButton.addEventListener('click', connectSharedSpreadsheet);
+    sharedSection.append(sharedLabel, sharedActions, sharedNote);
+
     const guide = document.createElement('a');
     guide.href = 'https://github.com/harunobushishido-boop/stopwatch/blob/main/GOOGLE_LOGIN_SETUP.md';
     guide.target = '_blank';
@@ -649,7 +1028,43 @@
     foot.className = 'clk-group__hint';
     foot.style.marginTop = '10px';
     foot.textContent = '「予定」シートは見出し1行＋入力1行です。A列=授業時間数、B列=区分、C列=特別の記入、D列=明日の持ち物、E列=追加のお知らせ、F列=1〜4時間授業の発表時刻（HH:mm）。5時間は14:25、6時間は15:15です。';
-    group.append(title, note, statusNode, errorNode, actions, testOutput, guide, foot);
+    const fallbackEditor = document.createElement('section');
+    fallbackEditor.id = 'pcScheduleFallbackEditor';
+    fallbackEditor.style.cssText = 'margin-top:14px;padding:12px;border:1px solid var(--clk-border,rgba(127,127,127,.25));border-radius:12px;min-width:0';
+    fallbackEditor.innerHTML = '<h3 style="font-size:14px;font-weight:700;margin:0 0 6px">自動作成できないときの入力・書き出し</h3>' +
+      '<p style="font-size:12px;line-height:1.65;opacity:.8;margin:0 0 10px">ここに入力した内容はこの端末に保存されます。Google接続に失敗してもCSV・Excelとして書き出し、Googleスプレッドシートへインポートできます。</p>' +
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0">' +
+      '<label style="min-width:0;font-size:12px">授業時間数<select id="pcScheduleManualClasses" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option value="">選択</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label>' +
+      '<label style="min-width:0;font-size:12px">区分<select id="pcScheduleManualKind" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"><option>通常</option><option>特別</option></select></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">特別の記入<input id="pcScheduleManualSpecial" type="text" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">明日の持ち物<textarea id="pcScheduleManualItems" rows="2" style="display:block;box-sizing:border-box;width:100%;min-width:0;resize:vertical;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></textarea></label>' +
+      '<label style="min-width:0;font-size:12px;grid-column:1/-1">追加のお知らせ<textarea id="pcScheduleManualExtra" rows="2" style="display:block;box-sizing:border-box;width:100%;min-width:0;resize:vertical;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></textarea></label>' +
+      '<label style="min-width:0;font-size:12px">1〜4時間授業の発表時刻<input id="pcScheduleManualTime" type="time" style="display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:4px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit"></label>' +
+      '</div>';
+    manualFields = {
+      classes: fallbackEditor.querySelector('#pcScheduleManualClasses'),
+      kind: fallbackEditor.querySelector('#pcScheduleManualKind'),
+      special: fallbackEditor.querySelector('#pcScheduleManualSpecial'),
+      items: fallbackEditor.querySelector('#pcScheduleManualItems'),
+      extra: fallbackEditor.querySelector('#pcScheduleManualExtra'),
+      time: fallbackEditor.querySelector('#pcScheduleManualTime')
+    };
+    Object.values(manualFields).forEach(field => field.addEventListener('input', () => storeCurrentScheduleRows(false)));
+    fillManualFields(getCachedScheduleRows());
+    const exportActions = document.createElement('div');
+    exportActions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
+    csvExportButton = makeButton('CSVを書き出す');
+    xlsxExportButton = makeButton('Excel（.xlsx）を書き出す');
+    exportActions.append(csvExportButton, xlsxExportButton);
+    csvExportButton.addEventListener('click', exportScheduleCsv);
+    xlsxExportButton.addEventListener('click', exportScheduleXlsx);
+    exportStatusNode = document.createElement('p');
+    exportStatusNode.className = 'clk-group__hint';
+    exportStatusNode.style.cssText = 'margin:8px 0 0;overflow-wrap:anywhere';
+    exportStatusNode.textContent = '入力内容はこの端末に保存されます。CSV・ExcelはGoogleスプレッドシートの「ファイル → インポート → アップロード」から読み込めます。';
+    fallbackEditor.append(exportActions, exportStatusNode);
+
+    group.append(title, note, statusNode, errorNode, actions, testOutput, sharedSection, fallbackEditor, guide, foot);
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
@@ -658,6 +1073,9 @@
     if (activeScheduleRecord()) setStatus('保存済みの明日の持ち物シートを再利用します。見つからない場合だけ作成します。');
     window.PC_SHEETS = {
       connect,
+      connectSharedSpreadsheet,
+      exportScheduleCsv,
+      exportScheduleXlsx,
       ensureScheduleSpreadsheet: autoCreateScheduleSpreadsheet,
       get connected() { return Boolean(accessToken && Date.now() < tokenExpiresAt); }
     };
