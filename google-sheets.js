@@ -2,7 +2,7 @@
   'use strict';
 
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
-  window.PC_SHEETS_BUILD = 'v112';
+  window.PC_SHEETS_BUILD = 'v113';
   let accessToken = '';
   let tokenExpiresAt = 0;
   let statusNode, errorNode, connectButton, testButton, testOutput, manualSaveButton, manualAnnounceButton;
@@ -73,6 +73,8 @@
     }
     return data || {};
   }
+
+  window.PC_SHEETS_API_JSON = scheduleApiJson;
 
   async function connect() {
     setError('');
@@ -325,7 +327,7 @@
 
   async function ensureScheduleSpreadsheetLayout(record, token) {
     const base = SHEETS_API + encodeURIComponent(record.spreadsheetId);
-    const requestJson = (url, options = {}) => scheduleApiJson(url, token, options);
+    const requestJson = (url, options = {}) => window.PC_SHEETS_API_JSON(url, token, options);
     const readMeta = () => requestJson(base + '?fields=sheets(properties(sheetId,title),tables(tableId,name,range))');
     let meta = await readMeta();
     let titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
@@ -759,7 +761,7 @@
 
   async function readAndCacheScheduleRows(record, token) {
     const range = escapeSheetName('予定') + '!A1:F2';
-    const data = await scheduleApiJson(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + encodeURIComponent(range), token);
+    const data = await window.PC_SHEETS_API_JSON(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '/values/' + encodeURIComponent(range), token);
     const values = Array.isArray(data.values) ? data.values : [];
     const result = [SCHEDULE_EXPORT_HEADERS.slice(), Array.isArray(values[1]) ? values[1] : ['', '', '', '', '', '']];
     const rows = cacheScheduleRows(result);
@@ -792,7 +794,7 @@
     sharedConnectButton.disabled = true;
     sharedConnectButton.textContent = '共有シートを確認中…';
     try {
-      const meta = await scheduleApiJson(SHEETS_API + encodeURIComponent(id) + '?fields=spreadsheetId,spreadsheetUrl,sheets(properties(sheetId,title),tables(tableId,name,range))', token);
+      const meta = await window.PC_SHEETS_API_JSON(SHEETS_API + encodeURIComponent(id) + '?fields=spreadsheetId,spreadsheetUrl,sheets(properties(sheetId,title),tables(tableId,name,range))', token);
       const record = {
         spreadsheetId: id,
         url: meta.spreadsheetUrl || url,
