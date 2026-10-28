@@ -598,6 +598,7 @@ $$('.clk-font-tile',sp).forEach(b=>b.addEventListener('click',()=>{const f=b.tex
 $$/* 文字色と背景 */
 const bg=$('.clk-bg'),bgA=panes[4],bgB=$('#bgB');let fgAuto=true,bgObjectUrl='',mediaContrastTimer=0;
 const lum=c=>{let r,g,b,m=String(c).trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i);if(m){let h=m[1];if(h.length===3)h=[...h].map(x=>x+x).join('');r=parseInt(h.slice(0,2),16);g=parseInt(h.slice(2,4),16);b=parseInt(h.slice(4,6),16)}else{m=String(c).match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);if(!m)return .5;r=+m[1];g=+m[2];b=+m[3]}const f=x=>{x/=255;return x<=.04045?x/12.92:((x+.055)/1.055)**2.4};return .2126*f(r)+.7152*f(g)+.0722*f(b)};
+const contrastRatio=(foreground,background)=>{const a=lum(foreground),b=lum(background);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05)};
 const autoFgButton=$('.clk-color-swatch--auto',sp),fgCss=document.createElement('style');fgCss.textContent='.clk-shell--auto-media .clk-time,.clk-shell--auto-media .clk-time__seconds,.clk-shell--auto-media .clk-date,.clk-shell--auto-media .clk-timer-circle__center,.clk-shell--auto-media .clk-sw-stage__time,.clk-shell--auto-media .clk-row{ text-shadow:0 1px 3px var(--clk-fg-shadow,rgba(0,0,0,.8)),0 0 10px var(--clk-fg-shadow,rgba(0,0,0,.8));-webkit-text-stroke:.35px var(--clk-fg-shadow,rgba(0,0,0,.8)) }';document.head.appendChild(fgCss);
 function setForeground(color,automatic,selected){if(!color)return;fgAuto=!!automatic;shell.style.setProperty('--clk-fg',color);shell.style.setProperty('--clk-fg-base',color);const whiteText=color.toLowerCase()==='#ffffff'||color.toLowerCase()==='rgb(255, 255, 255)';shell.style.setProperty('--clk-fg-shadow',whiteText?'rgba(0,0,0,.92)':'rgba(255,255,255,.96)');$$('.clk-color-swatch',sp).forEach(b=>{const on=b===selected;b.classList.toggle('clk-color-swatch--active',on);b.setAttribute('aria-checked',String(on))})}
 function autoForeground(l,media=false){
@@ -658,8 +659,18 @@ function applyAutoForeground(){
  const palette=bg.querySelector('.clk-bg-palette');
  const color=getComputedStyle(shell).getPropertyValue('--clk-bg').trim()||(palette?getComputedStyle(palette).backgroundColor:'#0a0e1a');
  if(media){
-  // Remote preset images may block canvas sampling through CORS. In that case, use the preset's base color and add a readable overlay rather than leaving the old text color untouched.
+  // Remote preset images may block canvas sampling through CORS. In that case, use the preset's base color and add a readable overlay.
   if(!sampleMedia(media))autoForeground(lum(color),true);
+  return;
+ }
+ // In automatic mode, retain a preset's carefully selected foreground when it has enough contrast.
+ const activePalette=bgA.querySelector('.clk-palette-mini--active:not(.clk-palette-mini--special)');
+ const pairedForeground=activePalette?getComputedStyle($('.clk-palette-mini__sample',activePalette)).color:'';
+ if(pairedForeground && contrastRatio(pairedForeground,color)>=4.5){
+  setForeground(pairedForeground,true,autoFgButton);
+  shell.classList.toggle('clk-shell--light',lum(color)>.5);
+  shell.classList.remove('clk-shell--auto-media');
+  $('.clk-bg-overlay',bg)?.remove();
   return;
  }
  autoForeground(lum(color),false);
@@ -682,7 +693,15 @@ function pal(backgroundColor,foregroundColor,accentColor){
  // Pure white uses black text; the other palettes retain their paired foreground color.
  const fg=brightness>=.97?'#000000':(foregroundColor||(brightness>.5?'#1F2937':'#F5EFE6'));
  if(fgAuto){
-   autoForeground(brightness,false);
+   // Prefer the palette's intended foreground only when it remains readable; otherwise use automatic black/white contrast.
+   if(foregroundColor && contrastRatio(foregroundColor,bgColor)>=4.5){
+     setForeground(foregroundColor,true,autoFgButton);
+     shell.classList.toggle('clk-shell--light',brightness>.5);
+     shell.classList.remove('clk-shell--auto-media');
+     $('.clk-bg-overlay',bg)?.remove();
+   }else{
+     autoForeground(brightness,false);
+   }
  }else{
    setForeground(fg,false,null);
    shell.classList.toggle('clk-shell--light',brightness>.5);
@@ -1711,7 +1730,7 @@ window.PC_STOPWATCH_HISTORY = {
 </script>
 <script src="./google-login-config.js"></script>
 <script type="module" src="./google-auth.js"></script>
-<script type="module" src="./google-sheets.js?v=113"></script>
+<script type="module" src="./google-sheets.js?v=114"></script>
 <script src="./schedule-announcement.js"></script>
 <script src="./schedule-voice-test.js"></script>
 <script id="reference-feature-parity">
