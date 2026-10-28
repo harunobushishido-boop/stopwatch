@@ -30,7 +30,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if [ -f weather-test-report-latest.json ]; then
-            git add weather-test-report.json
+            git add weather-test-report-latest.json
             git commit -m "[skip ci] weather UI 1000-cycle test report" || true
             git push || true
           fi
