@@ -618,21 +618,35 @@ function autoForeground(l,media=false){
   overlay.dataset.tone=color==='#FFFFFF'?'dark':'light';
  }else overlay?.remove();
 }
-const canvas=document.createElement('canvas');canvas.width=canvas.height=32;const bgSampleCtx=canvas.getContext('2d',{willReadFrequently:true});
+const canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;const bgSampleCtx=canvas.getContext('2d',{willReadFrequently:true});
 function sampleMedia(media){
  try{
   const w=media.videoWidth||media.naturalWidth,h=media.videoHeight||media.naturalHeight;
   if(!w||!h||!bgSampleCtx)return false;
-  bgSampleCtx.clearRect(0,0,32,32);bgSampleCtx.drawImage(media,0,0,32,32);
-  const data=bgSampleCtx.getImageData(0,0,32,32).data,center=[];
+  // Sample the same centered crop that object-fit:cover shows in the current viewport.
+  const viewW=Math.max(1,shell.clientWidth||window.innerWidth||w);
+  const viewH=Math.max(1,shell.clientHeight||window.innerHeight||h);
+  const aspect=Math.max(.42,Math.min(2.8,viewW/viewH));
+  const sampleWidth=64;
+  const sampleHeight=Math.max(24,Math.min(152,Math.round(sampleWidth/aspect)));
+  canvas.width=sampleWidth;canvas.height=sampleHeight;
+  let sx=0,sy=0,sw=w,sh=h;
+  if(w/h>aspect){sw=h*aspect;sx=(w-sw)/2}
+  else{sh=w/aspect;sy=(h-sh)/2}
+  bgSampleCtx.clearRect(0,0,sampleWidth,sampleHeight);
+  bgSampleCtx.drawImage(media,sx,sy,sw,sh,0,0,sampleWidth,sampleHeight);
+  const data=bgSampleCtx.getImageData(0,0,sampleWidth,sampleHeight).data,center=[];
   const linear=v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4};
-  for(let y=6;y<26;y++)for(let x=3;x<29;x++){
-   const i=(y*32+x)*4;if(data[i+3]<24)continue;
+  const xStart=Math.floor(sampleWidth*.10),xEnd=Math.ceil(sampleWidth*.90);
+  const yStart=Math.floor(sampleHeight*.20),yEnd=Math.ceil(sampleHeight*.80);
+  for(let y=yStart;y<yEnd;y++)for(let x=xStart;x<xEnd;x++){
+   const i=(y*sampleWidth+x)*4;if(data[i+3]<24)continue;
    center.push(.2126*linear(data[i])+.7152*linear(data[i+1])+.0722*linear(data[i+2]));
   }
   if(!center.length)return false;
   center.sort((a,b)=>a-b);
-  const representative=center[Math.min(center.length-1,Math.floor((center.length-1)*.58))];
+  // Favor the brighter side of mixed imagery so the automatic choice is less likely to disappear in highlights.
+  const representative=center[Math.min(center.length-1,Math.floor((center.length-1)*.68))];
   autoForeground(representative,true);
   return true;
  }catch{return false}
@@ -1697,7 +1711,7 @@ window.PC_STOPWATCH_HISTORY = {
 </script>
 <script src="./google-login-config.js"></script>
 <script type="module" src="./google-auth.js"></script>
-<script type="module" src="./google-sheets.js?v=112"></script>
+<script type="module" src="./google-sheets.js?v=113"></script>
 <script src="./schedule-announcement.js"></script>
 <script src="./schedule-voice-test.js"></script>
 <script id="reference-feature-parity">
