@@ -2,7 +2,7 @@
   'use strict';
 
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
-  window.PC_SHEETS_BUILD = 'v117';
+  window.PC_SHEETS_BUILD = 'v118';
   let accessToken = '';
   let tokenExpiresAt = 0;
   let statusNode, errorNode, connectButton, testButton, testOutput, manualSaveButton, manualAnnounceButton;
