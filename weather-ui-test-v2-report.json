@@ -2,7 +2,7 @@
   "ok": true,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 10378,
+  "elapsed_ms": 18528,
   "forecast_requests": 428,
   "features": {
     "edit_address": true,
@@ -16,8 +16,8 @@
     "stats": [
       "61%",
       "4.0 m/s",
-      "05:58",
-      "16:43"
+      "05:59",
+      "16:42"
     ],
     "sourceNote": "天気・時間帯予報・週間予報：Open-Meteo。学校敷地そのものの観測値ではありません。",
     "condition": "くもり時々晴れ",
@@ -27,5 +27,5 @@
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-28T12:40:39.403Z"
+  "timestamp": "2026-10-28T22:37:26.413Z"
 }
