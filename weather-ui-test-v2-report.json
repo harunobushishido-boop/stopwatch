@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 1622,
+  "elapsed_ms": 30426,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -10,9 +10,7 @@
     "refresh_weather": true,
     "zip_search": true
   },
-  "browser_errors": [
-    "pageerror: autoCreateScheduleSpreadsheet is not defined"
-  ],
-  "failure": "AssertionError [ERR_ASSERTION]: midnight foreground color should match the theme\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:91:10",
-  "timestamp": "2026-10-28T09:38:45.112Z"
+  "browser_errors": [],
+  "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:98:14",
+  "timestamp": "2026-10-28T09:43:28.603Z"
 }
