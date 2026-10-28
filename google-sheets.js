@@ -400,49 +400,8 @@
       { columnIndex: 5, columnName: newHeader[5], columnType: 'TEXT' }
     ];
 
-    // まずセルを「見出し1行＋今日の入力1行」に揃える。
-    // 古い日付列・過去の発表内容はこの「予定」シートから除き、別シートは触らない。
-    const requests = [
-      {
-        updateCells: {
-          range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 6 },
-          rows: [{ values: newHeader.map(cell) }, { values: todayRow.map(cell) }],
-          fields: 'userEnteredValue'
-        }
-      },
-      {
-        repeatCell: {
-          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
-          cell: { dataValidation: null },
-          fields: 'dataValidation'
-        }
-      },
-      {
-        setDataValidation: {
-          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 },
-          rule: {
-            condition: { type: 'ONE_OF_LIST', values: ['1', '2', '3', '4', '5', '6'].map(value => ({ userEnteredValue: value })) },
-            strict: true,
-            showCustomUi: true
-          }
-        }
-      },
-      {
-        setDataValidation: {
-          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 },
-          rule: {
-            condition: { type: 'ONE_OF_LIST', values: ['通常', '特別'].map(value => ({ userEnteredValue: value })) },
-            strict: true,
-            showCustomUi: true
-          }
-        }
-      }
-    ];
-
-    // 先に予定データと通常のセル設定を保存する。テーブルの失敗で予定の保存まで失敗扱いにしない。
-    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
-
-    // Google Sheets の Table DROPDOWN はチップ型プルダウンを作る。
+    // Google Sheets の型付きテーブル内ではセル単位の setDataValidation が拒否される。
+    // 先に重なっているテーブルを調べ、テーブル列の入力規則は Table API だけで設定する。
     const existingTables = Array.isArray(scheduleSheet.tables) ? scheduleSheet.tables : [];
     const overlappingTable = existingTables.find(table => {
       const range = table.range || {};
@@ -451,6 +410,52 @@
         Number(range.startColumnIndex || 0) < 6 &&
         Number(range.endColumnIndex || 0) > 0;
     });
+
+    const requests = [
+      {
+        updateCells: {
+          range: { sheetId, startRowIndex: 0, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 6 },
+          rows: [{ values: newHeader.map(cell) }, { values: todayRow.map(cell) }],
+          fields: 'userEnteredValue'
+        }
+      }
+    ];
+
+    // 通常のセル範囲でだけデータ検証を設定する。Table の型付き列には触れない。
+    if (!overlappingTable) {
+      requests.push({
+        repeatCell: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
+          cell: { dataValidation: null },
+          fields: 'dataValidation'
+        }
+      });
+      requests.push({
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 1 },
+          rule: {
+            condition: { type: 'ONE_OF_LIST', values: ['1', '2', '3', '4', '5', '6'].map(value => ({ userEnteredValue: value })) },
+            strict: true,
+            showCustomUi: true
+          }
+        }
+      });
+      requests.push({
+        setDataValidation: {
+          range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 1, endColumnIndex: 2 },
+          rule: {
+            condition: { type: 'ONE_OF_LIST', values: ['通常', '特別'].map(value => ({ userEnteredValue: value })) },
+            strict: true,
+            showCustomUi: true
+          }
+        }
+      });
+    }
+
+    // データ行・見出しは保存する。型付き列に対する不正な setDataValidation は送信しない。
+    await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
+
+    // Table DROPDOWN が使える場合はチップ型プルダウンを設定する。
     const tableRequest = !overlappingTable
       ? { addTable: { table: {
           name: 'TodaySchedule',
@@ -462,7 +467,11 @@
       await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests: [tableRequest] } });
       return true;
     } catch (tableError) {
-      console.warn('Chip-dropdown table setup failed; applying standard dropdown validation instead.', tableError);
+      console.warn('Chip-dropdown table setup failed.', tableError);
+      // 既存 Table の列はセル単位の入力規則に切り替えない。接続・読み取り・保存は続行する。
+      if (overlappingTable) return false;
+
+      // テーブルを新設できなかった通常範囲だけ、セルのプルダウンにフォールバックする。
       const validation = values => ({
         condition: { type: 'ONE_OF_LIST', values: values.map(value => ({ userEnteredValue: value })) },
         strict: true,
