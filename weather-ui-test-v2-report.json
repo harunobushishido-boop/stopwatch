@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 622,
+  "elapsed_ms": 905,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -11,9 +11,8 @@
     "zip_search": true
   },
   "browser_errors": [
-    "pageerror: Cannot read properties of null (reading 'querySelector')",
     "pageerror: autoCreateScheduleSpreadsheet is not defined"
   ],
   "failure": "AssertionError [ERR_ASSERTION]: midnight foreground color should match the theme\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:91:10",
-  "timestamp": "2026-10-28T09:07:28.715Z"
+  "timestamp": "2026-10-28T09:10:34.841Z"
 }
