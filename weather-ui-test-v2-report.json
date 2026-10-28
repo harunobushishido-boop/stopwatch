@@ -2,7 +2,7 @@
   "ok": true,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 18528,
+  "elapsed_ms": 10958,
   "forecast_requests": 428,
   "features": {
     "edit_address": true,
@@ -19,13 +19,13 @@
       "05:59",
       "16:42"
     ],
-    "sourceNote": "天気・時間帯予報・週間予報：Open-Meteo。学校敷地そのものの観測値ではありません。",
+    "sourceNote": "現在の観測：気象庁アメダス・仙台（約0.0km） 2026-10-21 20:00／天気・時間帯予報・週間予報：Open-Meteo。学校敷地そのものの観測値ではありません。",
     "condition": "くもり時々晴れ",
-    "feels": "Open-Meteoの気温予報（2026-10-27 08:00）",
+    "feels": "気象庁アメダスの観測値（観測時刻 2026-10-21 20:00）",
     "location": "仙台市立富沢小学校",
     "providerStatus": "Open-Meteoを優先",
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-28T22:37:26.413Z"
+  "timestamp": "2026-10-28T22:45:36.135Z"
 }
