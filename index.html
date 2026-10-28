@@ -1438,7 +1438,7 @@ html.gh-fullscreen-active .clk-shell--panel-open .clk-controls {
 (()=>{'use strict';
 const install=()=>{
   const panes=[...document.querySelectorAll('.clk-panel__pane')];
-  const pane=panes.find(p=>p.querySelector('.clk-panel__footnote')&&p.querySelector('[aria-label="フォントの太さ"]'))||panes[5];
+  const pane=panes.find(p=>p.querySelector('.clk-panel__footnote')&&p.querySelector('[aria-label="フォントの太さ"]'))||panes[6];
   if(!pane)return false;
   let group=[...pane.querySelectorAll('.clk-group')].find(g=>g.querySelector('.clk-group__label')?.textContent.trim()==='音のテスト');
   if(!group){
@@ -1687,7 +1687,7 @@ window.PC_STOPWATCH_HISTORY = {
 </script>
 <script src="./google-login-config.js"></script>
 <script type="module" src="./google-auth.js"></script>
-<script type="module" src="./google-sheets.js?v=110"></script>
+<script type="module" src="./google-sheets.js?v=111"></script>
 <script src="./schedule-announcement.js"></script>
 <script src="./schedule-voice-test.js"></script>
 <script id="reference-feature-parity">
@@ -1695,7 +1695,7 @@ window.PC_STOPWATCH_HISTORY = {
 'use strict';
 const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const shell=q('.clk-shell'),bgApi=window.__clkBgApi,panes=qa('.clk-panel__pane');
-const bgPane=panes[3],musicPane=panes[2],settingsPane=panes[5];
+const bgPane=panes[4],musicPane=panes[3],settingsPane=panes[6];
 if(!shell||!bgApi||!bgPane||!musicPane||!settingsPane)return;
 const notice=(host,id,text)=>{let el=q('#'+id,host);if(!el){el=document.createElement('p');el.id=id;el.className='clk-group__hint';el.setAttribute('aria-live','polite');el.style.margin='8px 0 0';host.append(el)}el.textContent=text};
 const safeStore=(key,val)=>{try{localStorage.setItem(key,val)}catch(e){}};
