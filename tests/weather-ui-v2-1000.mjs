@@ -146,7 +146,21 @@ try{
   assert.ok(forecastRequests>0);
 }catch(e){failure=String(e?.stack||e)}
 
-const report={ok:!failure,requested_operations:1000,completed_operations:completed,elapsed_ms:Date.now()-started,forecast_requests:forecastRequests,features:{edit_address:true,auto_manual_toggle:true,refresh_weather:true,zip_search:true},browser_errors:errors,failure,timestamp:new Date().toISOString()};
+let weatherDebug=null;
+try{
+  weatherDebug=await page.evaluate(()=>({
+    stats:Array.from(document.querySelectorAll('.clk-weather__stat-value')).map(x=>x.textContent.trim()),
+    sourceNote:document.querySelector('.clk-weather__source-note')?.textContent||'',
+    condition:document.querySelector('.clk-weather__cond')?.textContent||'',
+    feels:document.querySelector('.clk-weather__feels')?.textContent||'',
+    location:document.querySelector('.clk-weather__loc-name')?.textContent||'',
+    providerStatus:document.querySelector('#pcWeatherProviderStatus')?.textContent||'',
+    selectedProvider:window.__weatherFallback?.getSelectedProvider?.()||'unavailable',
+    helperLoaded:typeof window.__weatherFallback?.getForecast==='function'
+  }));
+}catch(debugError){weatherDebug={debugError:String(debugError)}}
+
+const report={ok:!failure,requested_operations:1000,completed_operations:completed,elapsed_ms:Date.now()-started,forecast_requests:forecastRequests,features:{edit_address:true,auto_manual_toggle:true,refresh_weather:true,zip_search:true},browser_errors:errors,failure,weather_debug:weatherDebug,timestamp:new Date().toISOString()};
 await fs.writeFile('weather-ui-test-v2-report.json',JSON.stringify(report,null,2));
 console.log(JSON.stringify(report));
 await browser.close();
