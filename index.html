@@ -639,7 +639,17 @@ function sampleMedia(media){
 }
 function stopMediaSampling(){clearInterval(mediaContrastTimer);mediaContrastTimer=0}
 function clearMedia(){stopMediaSampling();bg.querySelectorAll('video,img,.clk-bg-overlay').forEach(x=>x.remove());if(bgObjectUrl){URL.revokeObjectURL(bgObjectUrl);bgObjectUrl=''}shell.classList.remove('clk-shell--media','clk-shell--auto-media')}
-function applyAutoForeground(){const media=bg.querySelector('video,img');if(media){sampleMedia(media);return}const palette=bg.querySelector('.clk-bg-palette');const color=getComputedStyle(shell).getPropertyValue('--clk-bg').trim()||(palette?getComputedStyle(palette).backgroundColor:'#0a0e1a');autoForeground(lum(color),false)}
+function applyAutoForeground(){
+ const media=bg.querySelector('video,img');
+ const palette=bg.querySelector('.clk-bg-palette');
+ const color=getComputedStyle(shell).getPropertyValue('--clk-bg').trim()||(palette?getComputedStyle(palette).backgroundColor:'#0a0e1a');
+ if(media){
+  // Remote preset images may block canvas sampling through CORS. In that case, use the preset's base color and add a readable overlay rather than leaving the old text color untouched.
+  if(!sampleMedia(media))autoForeground(lum(color),true);
+  return;
+ }
+ autoForeground(lum(color),false);
+}
 function installBackground(file){if(!file)return false;const isVideo=/^video\//i.test(file.type)||/\.(mp4|webm|mov|m4v)$/i.test(file.name||''),isImage=/^image\//i.test(file.type)||/\.(png|jpe?g|webp|gif|avif|bmp)$/i.test(file.name||'');if(!isImage&&!isVideo){toast('画像または動画ファイルを選んでください。');return false}const limit=(isVideo?100:20)*1024*1024;if(file.size>limit){toast(isVideo?'動画は100MB以下のファイルを選んでください。':'画像は20MB以下のファイルを選んでください。');return false}clearMedia();const media=document.createElement(isVideo?'video':'img');bgObjectUrl=URL.createObjectURL(file);media.src=bgObjectUrl;media.className=isVideo?'clk-bg-video':'clk-bg-image';media.style.cssText='position:absolute!important;inset:0!important;z-index:1!important;width:100%!important;height:100%!important;object-fit:cover!important;display:block!important';if(isVideo){media.autoplay=true;media.loop=true;media.muted=true;media.defaultMuted=true;media.playsInline=true;media.setAttribute('muted','');media.setAttribute('playsinline','');media.setAttribute('autoplay','');media.preload='auto';media.controls=false;media.addEventListener('loadedmetadata',()=>{sampleMedia(media);media.play().catch(()=>{})},{once:true});media.addEventListener('canplay',()=>media.play().catch(()=>{}),{once:true});media.addEventListener('error',()=>toast('この動画形式は再生できません。MP4またはWebMをお試しください。'),{once:true})}else media.addEventListener('load',()=>sampleMedia(media),{once:true});bg.appendChild(media);shell.classList.add('clk-shell--media');autoForeground(lum(getComputedStyle(shell).getPropertyValue('--clk-bg')),true);if(isVideo){stopMediaSampling();mediaContrastTimer=setInterval(()=>{if(fgAuto&&!document.hidden&&media.isConnected)sampleMedia(media)},3000);media.play().catch(()=>{})}else if(media.complete)sampleMedia(media);const label=$('.clk-bg-thumb__label',bgB);if(label)label.textContent=file.name;const clear=$('#clkBgClear',bgB);if(clear)clear.hidden=false;window.__clkSaveTheme?.();return true}
 $$('.clk-color-swatch:not(.clk-color-swatch--custom)',sp).forEach(b=>b.addEventListener('click',()=>{if(b.matches('.clk-color-swatch--auto')){fgAuto=true;applyAutoForeground();$$('.clk-color-swatch',sp).forEach(x=>{const on=x===autoFgButton;x.classList.toggle('clk-color-swatch--active',on);x.setAttribute('aria-checked',String(on))});return}const dot=$('.clk-color-swatch__dot',b),color=dot?.style.backgroundColor||b.getAttribute('aria-label')||b.title;setForeground(color,false,b);shell.classList.remove('clk-shell--auto-media');$('.clk-bg-overlay',bg)?.remove()}));
 $('.clk-color-swatch__input').oninput=e=>{setForeground(e.target.value,false,e.target.closest('.clk-color-swatch--custom'));shell.classList.remove('clk-shell--auto-media');$('.clk-bg-overlay',bg)?.remove();window.__clkSaveTheme?.()};
@@ -1687,7 +1697,7 @@ window.PC_STOPWATCH_HISTORY = {
 </script>
 <script src="./google-login-config.js"></script>
 <script type="module" src="./google-auth.js"></script>
-<script type="module" src="./google-sheets.js?v=111"></script>
+<script type="module" src="./google-sheets.js?v=112"></script>
 <script src="./schedule-announcement.js"></script>
 <script src="./schedule-voice-test.js"></script>
 <script id="reference-feature-parity">
