@@ -1,9 +1,9 @@
 {
-  "ok": false,
+  "ok": true,
   "requested_operations": 1000,
-  "completed_operations": 0,
-  "elapsed_ms": 31124,
-  "forecast_requests": 1,
+  "completed_operations": 1000,
+  "elapsed_ms": 10378,
+  "forecast_requests": 428,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
@@ -11,21 +11,21 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": "page.waitForFunction: Timeout 30000ms exceeded.\n    at /home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:98:14",
+  "failure": null,
   "weather_debug": {
     "stats": [
       "61%",
-      "— m/s",
-      "05:32",
-      "17:18"
+      "4.0 m/s",
+      "05:58",
+      "16:43"
     ],
-    "sourceNote": "気象庁の予報取得に失敗しました。詳細：Cannot set properties of undefined (setting 'textContent')。通信状態を確認して「再取得」を押してください。",
-    "condition": "取得できません",
-    "feels": "再取得ボタンでもう一度お試しください",
+    "sourceNote": "天気・時間帯予報・週間予報：Open-Meteo。学校敷地そのものの観測値ではありません。",
+    "condition": "くもり時々晴れ",
+    "feels": "Open-Meteoの気温予報（2026-10-27 08:00）",
     "location": "仙台市立富沢小学校",
     "providerStatus": "Open-Meteoを優先",
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-28T10:00:12.237Z"
+  "timestamp": "2026-10-28T12:40:39.403Z"
 }
