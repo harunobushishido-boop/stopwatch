@@ -2,6 +2,7 @@
   'use strict';
 
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
+  window.PC_SHEETS_BUILD = 'v110';
   let accessToken = '';
   let tokenExpiresAt = 0;
   let statusNode, errorNode, connectButton, testButton, testOutput, manualSaveButton, manualAnnounceButton;
@@ -59,8 +60,14 @@
     try { data = await response.json(); } catch (error) {}
     if (!response.ok) {
       const message = data && data.error && data.error.message;
+      if (response.status === 401) {
+        throw new Error('Googleのログイン許可の有効期限が切れています。スプレッドシート設定タブからGoogleアカウントを再接続してください。' + (message ? ' 詳細: ' + message : ''));
+      }
       if (response.status === 403) {
-        throw new Error('Googleのアクセス許可が不足しているか、スプレッドシートAPIへのアクセスが拒否されました。Googleログインの許可を確認してください。' + (message ? ' 詳細: ' + message : ''));
+        throw new Error('Google APIからアクセスを拒否されました。リンク共有が編集可でも、接続中のGoogleアカウント・Sheets APIの有効化・OAuthの許可範囲を確認してください。' + (message ? ' 詳細: ' + message : ''));
+      }
+      if (response.status === 404) {
+        throw new Error('スプレッドシートが見つかりません。URLのIDが正しいか、接続しているGoogleアカウントから開けるか確認してください。' + (message ? ' 詳細: ' + message : ''));
       }
       throw new Error(message || ('Google Sheets APIエラー（HTTP ' + response.status + '）'));
     }
@@ -318,17 +325,7 @@
 
   async function ensureScheduleSpreadsheetLayout(record, token) {
     const base = SHEETS_API + encodeURIComponent(record.spreadsheetId);
-    const requestJson = async (url, options = {}) => {
-      const response = await fetch(url, {
-        method: options.method || 'GET',
-        headers: Object.assign({ Authorization: 'Bearer ' + token }, options.body ? { 'Content-Type': 'application/json' } : {}),
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        cache: 'no-store'
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error && data.error.message || 'Googleスプレッドシートを更新できませんでした。');
-      return data;
-    };
+    const requestJson = (url, options = {}) => scheduleApiJson(url, token, options);
     const readMeta = () => requestJson(base + '?fields=sheets(properties(sheetId,title),tables(tableId,name,range))');
     let meta = await readMeta();
     let titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
@@ -860,7 +857,7 @@
     title.textContent = 'Googleスプレッドシート連携';
     const note = document.createElement('p');
     note.className = 'clk-group__hint';
-    note.textContent = 'Google接続後に明日の持ち物シートを自動作成します。スプレッドシートが削除されていた場合も再作成し、授業時間数のプルダウンを設定します。';
+    note.textContent = 'ここで予定を自分で入力し、保存して音声発表できます。共有シートに接続すると同じ内容を同期します。CSV・Excelは入力内容ではなく、Googleスプレッドシートに取り込むための空テンプレートを書き出します。';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:9px 0;font-size:12.5px;line-height:1.5';
     statusNode.textContent = '未接続';
