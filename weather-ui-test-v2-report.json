@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 411,
+  "elapsed_ms": 1622,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -13,6 +13,6 @@
   "browser_errors": [
     "pageerror: autoCreateScheduleSpreadsheet is not defined"
   ],
-  "failure": "AssertionError [ERR_ASSERTION]: midnight foreground color should match the theme\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:91:10\n    at runNextTicks (node:internal/process/task_queues:64:5)\n    at process.processImmediate (node:internal/timers:452:9)\n    at process.callbackTrampoline (node:internal/async_hooks:130:17)",
-  "timestamp": "2026-10-28T09:12:06.678Z"
+  "failure": "AssertionError [ERR_ASSERTION]: midnight foreground color should match the theme\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:91:10",
+  "timestamp": "2026-10-28T09:38:45.112Z"
 }
