@@ -909,7 +909,7 @@ async function wx(lat,lon,name){
   const currentWeather=WC(current.code||currentCode);$('.clk-weather__cond',wp).textContent=currentWeather[0];
   $('.clk-weather__feels',wp).textContent=forecast.__currentObserved?'気象庁アメダスの観測値'+(current.time?'（観測時刻 '+current.time.slice(0,16).replace('T',' ' )+'）':''):(forecast.__source||'天気予報')+'の気温予報'+(current.time?'（'+current.time.slice(0,16).replace('T',' ' )+'）':'');
   $('.clk-weather__hero-icon',wp).innerHTML='<span style="font-size:56px;line-height:1">'+currentWeather[1]+'</span>';
-  const sv_=$('.clk-weather__stat-value',wp);sv_[0].textContent=current.humidity!==''&&Number.isFinite(Number(current.humidity))?Math.round(Number(current.humidity))+'%':'—';sv_[1].textContent=current.wind!==''&&Number.isFinite(Number(current.wind))?Number(current.wind).toFixed(1)+' m/s':'—';
+  const sv_=$$('.clk-weather__stat-value',wp);sv_[0].textContent=current.humidity!==''&&Number.isFinite(Number(current.humidity))?Math.round(Number(current.humidity))+'%':'—';sv_[1].textContent=current.wind!==''&&Number.isFinite(Number(current.wind))?Number(current.wind).toFixed(1)+' m/s':'—';
   sv_[2].textContent=calcSolarTime(today,lat,lon,true);sv_[3].textContent=calcSolarTime(today,lat,lon,false);
   const hl=$('.clk-weather__hourly',wp);hl.style.visibility='';if(!hl._t&&hl.firstElementChild)hl._t=hl.firstElementChild.cloneNode(true);hl.innerHTML='';
   const popTimes=spop.timeDefines||[],pops=popArea?.pops||[],tempTimes=stemp?.timeDefines||[],temps=tempArea?.temps||[];
