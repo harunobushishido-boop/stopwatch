@@ -1,7 +1,7 @@
 {
-  "ok": false,
+  "ok": true,
   "requested_operations": 1000,
-  "completed_operations": 2,
+  "completed_operations": 1000,
   "features": {
     "timer_stop": true,
     "timer_reset": true,
@@ -9,9 +9,7 @@
     "alarm_stop_code": true,
     "history_best_code": true
   },
-  "browser_errors": [
-    "pageerror: autoCreateScheduleSpreadsheet is not defined"
-  ],
-  "failure": "AssertionError [ERR_ASSERTION]: stop/pause state failed #1\n\n'停止' !== '再開'\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/timer-ui-1000.mjs:62:12",
-  "timestamp": "2026-10-27T12:51:09.013Z"
+  "browser_errors": [],
+  "failure": null,
+  "timestamp": "2026-10-28T10:02:14.870Z"
 }
