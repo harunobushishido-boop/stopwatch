@@ -60,16 +60,17 @@
     try { data = await response.json(); } catch (error) {}
     if (!response.ok) {
       const message = data && data.error && data.error.message;
+      const apiError = (description) => { const error = new Error(description); error.status = response.status; return error; };
       if (response.status === 401) {
-        throw new Error('Googleのログイン許可の有効期限が切れています。スプレッドシート設定タブからGoogleアカウントを再接続してください。' + (message ? ' 詳細: ' + message : ''));
+        throw apiError('Googleのログイン許可の有効期限が切れています。スプレッドシート設定タブからGoogleアカウントを再接続してください。' + (message ? ' 詳細: ' + message : ''));
       }
       if (response.status === 403) {
-        throw new Error('Google APIからアクセスを拒否されました。リンク共有が編集可でも、接続中のGoogleアカウント・Sheets APIの有効化・OAuthの許可範囲を確認してください。' + (message ? ' 詳細: ' + message : ''));
+        throw apiError('Google APIからアクセスを拒否されました。リンク共有が編集可でも、接続中のGoogleアカウント・Sheets APIの有効化・OAuthの許可範囲を確認してください。' + (message ? ' 詳細: ' + message : ''));
       }
       if (response.status === 404) {
-        throw new Error('スプレッドシートが見つかりません。URLのIDが正しいか、接続しているGoogleアカウントから開けるか確認してください。' + (message ? ' 詳細: ' + message : ''));
+        throw apiError('スプレッドシートが見つかりません。URLのIDが正しいか、接続しているGoogleアカウントから開けるか確認してください。' + (message ? ' 詳細: ' + message : ''));
       }
-      throw new Error(message || ('Google Sheets APIエラー（HTTP ' + response.status + '）'));
+      throw apiError(message || ('Google Sheets APIエラー（HTTP ' + response.status + '）'));
     }
     return data || {};
   }
@@ -277,6 +278,8 @@
     }
   }
 
+  const SCHEDULE_SPREADSHEET_TITLE = '6年4組便利タイマー - 明日の持ち物';
+
   const SCHEDULE_SHEET_STORAGE_KEY = 'pc-schedule-sheet-v1';
   let scheduleCreationPromise = null;
 
@@ -482,6 +485,101 @@
     }
   }
 
+
+async function autoCreateScheduleSpreadsheet() {
+    if (scheduleCreationPromise) return scheduleCreationPromise;
+    scheduleCreationPromise = (async () => {
+      const auth = window.PC_AUTH;
+      const email = String(auth && auth.currentUser && auth.currentUser.email || '').trim().toLowerCase();
+      const token = auth && auth.getAccessToken && auth.getAccessToken();
+      const expiry = auth && auth.getAccessTokenExpiresAt && Number(auth.getAccessTokenExpiresAt());
+      if (!email) throw new Error('Googleアカウントのメールアドレスを確認できません。ログインし直してください。');
+      if (!token || !expiry || Date.now() >= expiry) throw new Error('Googleのアクセス許可が期限切れです。Googleアカウント連携ボタンを押してください。');
+      accessToken = token;
+      tokenExpiresAt = expiry;
+
+      let record = scheduleSheetRecord(email);
+      if (record && record.spreadsheetId) {
+        try {
+          const meta = await window.PC_SHEETS_API_JSON(SHEETS_API + encodeURIComponent(record.spreadsheetId) + '?fields=spreadsheetId,spreadsheetUrl', token);
+          record.url = meta.spreadsheetUrl || record.url || ('https://docs.google.com/spreadsheets/d/' + record.spreadsheetId + '/edit');
+          const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+          record.chipDropdownApplied = chipDropdownApplied;
+          saveScheduleSheetRecord(email, record);
+          renderScheduleSheetNotice(record, chipDropdownApplied
+            ? '既存の明日の持ち物シートに接続しました。授業時間数のプルダウンを確認しました。'
+            : '既存の持ち物シートに接続しました。授業時間数のプルダウンを設定しました。');
+          return record;
+        } catch (error) {
+          if (error.status === 401 || error.status === 403) throw error;
+          if (error.status && error.status !== 404) throw error;
+          // Only a definite missing-file response allows replacement creation.
+          // Temporary/network/API errors must not silently create duplicate spreadsheets.
+          if (error.status !== 404) throw error;
+          console.warn('Cached schedule spreadsheet was not found; creating a replacement.', error);
+          record = null;
+        }
+      }
+
+      const created = await window.PC_SHEETS_API_JSON(SHEETS_API, token, {
+        method: 'POST',
+        body: {
+          properties: { title: SCHEDULE_SPREADSHEET_TITLE },
+          sheets: [{ properties: { title: '予定', gridProperties: { rowCount: 200, columnCount: 26 } } }]
+        }
+      });
+      if (!created.spreadsheetId) throw new Error('Googleから新しいスプレッドシートIDが返されませんでした。');
+      record = {
+        spreadsheetId: created.spreadsheetId,
+        url: created.spreadsheetUrl || ('https://docs.google.com/spreadsheets/d/' + created.spreadsheetId + '/edit'),
+        createdAt: Date.now()
+      };
+      // Save ID before formatting so a retry will reuse the same spreadsheet.
+      saveScheduleSheetRecord(email, record);
+      const chipDropdownApplied = await ensureScheduleSpreadsheetLayout(record, token);
+      record.chipDropdownApplied = chipDropdownApplied;
+      saveScheduleSheetRecord(email, record);
+      renderScheduleSheetNotice(record, chipDropdownApplied
+        ? '明日の持ち物シートを自動作成し、授業時間数のプルダウンを設定しました。'
+        : '明日の持ち物シートを自動作成し、授業時間数のプルダウンを設定しました。');
+      return record;
+    })();
+    try {
+      return await scheduleCreationPromise;
+    } finally {
+      scheduleCreationPromise = null;
+    }
+  }
+
+  function renderScheduleSheetNotice(record, message) {
+    let node = document.getElementById('pcScheduleSheetNotice');
+    if (!node) {
+      const host = document.getElementById('pcGoogleSheetsGroup') || document.getElementById('pcGoogleLoginGroup');
+      if (!host) return;
+      node = document.createElement('div');
+      node.id = 'pcScheduleSheetNotice';
+      node.style.cssText = 'margin-top:12px;padding:10px;border:1px solid #15803d55;border-radius:10px;font-size:12px;line-height:1.6;overflow-wrap:anywhere';
+      host.appendChild(node);
+    }
+    node.replaceChildren();
+    const text = document.createElement('p');
+    text.style.margin = '0';
+    text.textContent = message;
+    node.appendChild(text);
+    if (record && record.url) {
+      const link = document.createElement('a');
+      link.href = record.url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = '明日の持ち物シートを開く';
+      link.style.cssText = 'display:inline-block;margin-top:6px;color:inherit;text-decoration:underline;text-underline-offset:3px';
+      node.appendChild(link);
+      const detail = document.createElement('p');
+      detail.textContent = '「予定」シートのA2で授業時間数、D2で明日の持ち物を指定します。日付入力は不要です。';
+      detail.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
+      node.appendChild(detail);
+    }
+  }
 
   const SHARED_SCHEDULE_URL = 'https://docs.google.com/spreadsheets/d/1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ/edit?usp=sharing';
   const SHARED_SCHEDULE_ID = '1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ';
