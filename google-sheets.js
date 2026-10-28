@@ -2,7 +2,7 @@
   'use strict';
 
   const SHEETS_API = 'https://sheets.googleapis.com/v4/spreadsheets/';
-  window.PC_SHEETS_BUILD = 'v119';
+  window.PC_SHEETS_BUILD = 'v120';
   let accessToken = '';
   let tokenExpiresAt = 0;
   let statusNode, errorNode, connectButton, testButton, testOutput, manualSaveButton, manualAnnounceButton;
@@ -335,6 +335,8 @@
     const readMeta = () => requestJson(base + '?fields=sheets(properties(sheetId,title),tables(tableId,name,range))');
     let meta = await readMeta();
     let titles = new Set((meta.sheets || []).map(sheet => sheet.properties && sheet.properties.title).filter(Boolean));
+    // 既存の共有シートでは、設定済みプルダウンやテーブル定義を変更しない。
+    const createdScheduleSheet = !titles.has('予定');
 
     // 新しく作るのは「予定」シートだけ。既存の「記録」シートは削除も変更もしない。
     if (!titles.has('予定')) {
@@ -421,8 +423,9 @@
       }
     ];
 
-    // 通常のセル範囲でだけデータ検証を設定する。Table の型付き列には触れない。
-    if (!overlappingTable) {
+    // 既存シートのプルダウンはユーザーが設定済みなので触らない。
+    // 入力規則を作成するのは、今回新しく作ったシートだけ。
+    if (createdScheduleSheet && !overlappingTable) {
       requests.push({
         repeatCell: {
           range: { sheetId, startRowIndex: 1, endRowIndex: 200, startColumnIndex: 0, endColumnIndex: 26 },
@@ -455,7 +458,10 @@
     // データ行・見出しは保存する。型付き列に対する不正な setDataValidation は送信しない。
     await requestJson(base + ':batchUpdate', { method: 'POST', body: { requests } });
 
-    // Table DROPDOWN が使える場合はチップ型プルダウンを設定する。
+    // 既存シートは値だけ同期する。既存のプルダウン・型付き列・テーブル設定は一切変更しない。
+    if (!createdScheduleSheet) return true;
+
+    // 今回新規作成したシートだけ、初期のプルダウン／テーブル設定を行う。
     const tableRequest = !overlappingTable
       ? { addTable: { table: {
           name: 'TodaySchedule',
