@@ -467,7 +467,7 @@
   }
 
 
-  const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v1';
+  const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v2';
 
   function selectedWeatherProvider() {
     try {
@@ -528,7 +528,7 @@
     updateButtons();
     const note = document.querySelector('.clk-weather__source-note');
     if (note) {
-      note.textContent = '天気予報はOpen-Meteoまたは気象庁から取得します。選択した取得元で接続できない場合は、もう一方に自動で切り替えます。富沢小学校の初期座標を使用しますが、予報は学校敷地そのものの観測値ではありません。';
+      note.textContent = '現在の気温・湿度・風速は気象庁アメダス、天気・時間帯予報・週間予報は選択した取得元（初期設定：Open-Meteo）を使用します。取得できない場合はもう一方の予報APIに自動で切り替えます。観測所は富沢小学校の敷地内とは限りません。';
     }
   }
 
@@ -612,7 +612,8 @@
     };
     forecast.__currentObserved = false;
     forecast.__locationName = String(name || '');
-    return forecast;
+    // Forecasts are from Open-Meteo by default; overwrite current observations with the nearest JMA AMeDAS reading.
+    return await addAmedasObservation(forecast, latitude, longitude);
   }
 
   async function getWeatherForecast(lat, lon, name, requestedProvider) {
