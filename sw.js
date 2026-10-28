@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'benri-timer-v114';
+const CACHE_NAME = 'benri-timer-v115';
 const CACHE_PREFIX = 'benri-timer-';
 const APP_SHELL = [
   './',
@@ -10,7 +10,7 @@ const APP_SHELL = [
   './weather-fallback.js',
   './google-login-config.js',
   './google-auth.js',
-  './google-sheets.js?v=114',
+  './google-sheets.js?v=115',
   './schedule-announcement.js',
   './schedule-voice-test.js',
   './manifest.webmanifest',
