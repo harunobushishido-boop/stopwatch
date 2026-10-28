@@ -409,7 +409,14 @@
     } catch (error) {
       forecast.__observation = null;
       forecast.__currentObserved = false;
-      console.warn('アメダスの現在観測を取得できませんでした。気象庁の予報を続けて表示します。', error);
+      // Never label an Open-Meteo forecast value as a JMA current observation.
+      // If AMeDAS is unavailable, show unavailable current measurements rather than a value from the forecast provider.
+      const current = Object.assign({}, forecast.__current || {});
+      current.temp = '';
+      current.humidity = '';
+      current.wind = '';
+      forecast.__current = current;
+      console.warn('アメダスの現在観測を取得できませんでした。現在値は非表示にし、予報だけ続けて表示します。', error);
     }
     return forecast;
   }

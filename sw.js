@@ -1,13 +1,13 @@
 'use strict';
 
-const CACHE_NAME = 'benri-timer-v122';
+const CACHE_NAME = 'benri-timer-v123';
 const CACHE_PREFIX = 'benri-timer-';
 const APP_SHELL = [
   './',
   './index.html',
   './privacy.html',
   './terms.html',
-  './weather-fallback.js?v=119',
+  './weather-fallback.js?v=120',
   './google-login-config.js?v=118',
   './google-auth.js?v=118',
   './google-sheets.js?v=120',
