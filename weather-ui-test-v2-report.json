@@ -1,8 +1,8 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 13229,
+  "elapsed_ms": 10342,
   "forecast_requests": 428,
   "features": {
     "edit_address": true,
@@ -10,8 +10,10 @@
     "refresh_weather": true,
     "zip_search": true
   },
-  "browser_errors": [],
-  "failure": null,
+  "browser_errors": [
+    "pageerror: Identifier '$' has already been declared"
+  ],
+  "failure": "AssertionError [ERR_ASSERTION]: browser errors: pageerror: Identifier '$' has already been declared\n\n1 !== 0\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:145:10",
   "weather_debug": {
     "stats": [
       "61%",
@@ -27,5 +29,5 @@
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-29T09:01:43.498Z"
+  "timestamp": "2026-10-29T11:12:44.960Z"
 }
