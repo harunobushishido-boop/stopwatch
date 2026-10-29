@@ -476,9 +476,20 @@
 
   const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v4';
 
-  // Current observations always come from JMA AMeDAS; forecasts use Open-Meteo by default.
+  const WEATHER_PROVIDER_MIGRATION_KEY = 'pc-weather-provider-default-migrated-v1';
+  try {
+    if (localStorage.getItem(WEATHER_PROVIDER_MIGRATION_KEY) !== '1') {
+      localStorage.setItem(WEATHER_PROVIDER_KEY, 'open-meteo');
+      localStorage.setItem(WEATHER_PROVIDER_MIGRATION_KEY, '1');
+    }
+  } catch (_) {}
+  // Initial visits migrate to Open-Meteo; future explicit choices remain available.
   function selectedWeatherProvider() {
-    return 'open-meteo';
+    try {
+      return localStorage.getItem(WEATHER_PROVIDER_KEY) === 'jma' ? 'jma' : 'open-meteo';
+    } catch (_) {
+      return 'open-meteo';
+    }
   }
 
   function installWeatherSourcePicker() {
@@ -503,13 +514,11 @@
         '<strong style="font-size:12.5px">天気データの取得元</strong>' +
         '<span id="pcWeatherProviderStatus" aria-live="polite" style="font-size:11px;opacity:.78">予報：Open-Meteo</span>' +
       '</div>' +
-      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">現在の気温・湿度・風速は気象庁アメダスから取得し、予報はOpen-Meteoを初期設定にします。Open-Meteoの予報取得に失敗した場合は気象庁の予報を代替表示します。</p>' +
+      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">現在の気温・湿度・風速は気象庁アメダスから取得します。予報は初期設定でOpen-Meteoを使い、下のボタンで気象庁へ切り替えられます。予報取得に失敗した場合はもう一方へ自動で切り替えます。</p>' +
       '<div id="pcWeatherProviderOptions" style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button type="button" data-weather-provider="open-meteo" aria-pressed="true" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">Open-Meteo</button>' +
         '<button type="button" data-weather-provider="jma" aria-pressed="false" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">気象庁</button>' +
       '</div>';
-    const providerOptions = panel.querySelector('#pcWeatherProviderOptions');
-    if (providerOptions) providerOptions.innerHTML = '<span style="font-size:12px;font-weight:600;line-height:1.5">予報：Open-Meteo（取得に失敗した場合は気象庁を代替）</span>';
     const buttons = Array.from(panel.querySelectorAll('[data-weather-provider]'));
     const status = panel.querySelector('#pcWeatherProviderStatus');
     const updateButtons = function () {
@@ -623,8 +632,9 @@
   }
 
   async function getWeatherForecast(lat, lon, name, requestedProvider) {
-    // Do not let an older stored preference or caller override the requested provider split.
-    const requested = 'open-meteo';
+    const requested = requestedProvider === 'jma' || requestedProvider === 'open-meteo'
+      ? requestedProvider
+      : selectedWeatherProvider();
     const first = requested === 'jma' ? getJmaForecastBase : getOpenMeteoForecast;
     const second = requested === 'jma' ? getOpenMeteoForecast : getJmaForecastBase;
     const firstName = requested === 'jma' ? '気象庁' : 'Open-Meteo';
