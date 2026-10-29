@@ -2,7 +2,7 @@
   "ok": false,
   "requested_operations": 1000,
   "completed_operations": 0,
-  "elapsed_ms": 1107,
+  "elapsed_ms": 454,
   "forecast_requests": 1,
   "features": {
     "edit_address": true,
@@ -27,5 +27,5 @@
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-29T08:57:34.227Z"
+  "timestamp": "2026-10-29T08:58:49.339Z"
 }
