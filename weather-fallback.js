@@ -682,7 +682,7 @@
   // Load the small post-parse fixes separately so the large reference HTML stays untouched.
   try {
     const fixScript = document.createElement('script');
-    fixScript.src = './feature-fixes.js?v=2';
+    fixScript.src = './feature-fixes.js?v=3';
     fixScript.defer = true;
     (document.head || document.documentElement).appendChild(fixScript);
   } catch (error) {
