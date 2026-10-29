@@ -1853,7 +1853,7 @@ if(!q('#pcMusicSleepGroup',musicPane)){
    // Stop the music-file player and all built-in environmental sound sources.
    try{const api=window.__clkMusicApi;if(api&&typeof api.stopPlayback==='function')api.stopPlayback()}catch(e){console.warn('音楽の停止に失敗しました。',e)}
    // Stop page audio/video, but leave the selected background video playing.
-   document.querySelectorAll('audio,video:not(.clk-bg-video)').forEach(media=>{try{media.pause();media.currentTime=0;if(media.tagName==='AUDIO')media.removeAttribute('src'),media.load()}catch(e){}});
+   document.querySelectorAll('audio,video:not(.clk-bg-video)').forEach(media=>{try{media.pause();media.currentTime=0}catch(e){}});
    // Remove the YouTube iframe completely so its playback cannot continue in the hidden panel.
    const ytContainer=q('#ytf',musicPane);
    if(ytContainer){ytContainer.querySelectorAll('iframe').forEach(frame=>{try{frame.src='about:blank'}catch(e){}});ytContainer.replaceChildren();ytContainer.style.display='none'}
