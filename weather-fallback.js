@@ -671,4 +671,13 @@
     '.clk-stage--sw-main>.clk-sw-history-panel .clk-lap-list--scroll{flex:0 1 auto;min-height:0;max-height:min(38vh,320px)!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;scrollbar-width:thin}' +
     '@media(max-width:720px){.clk-stage--sw-main>.clk-sw-history-panel{max-height:56vh!important}.clk-stage--sw-main>.clk-sw-history-panel .clk-lap-list--scroll{max-height:42vh!important}}';
   (document.head || document.documentElement).appendChild(style);
+  // Load the small post-parse fixes separately so the large reference HTML stays untouched.
+  try {
+    const fixScript = document.createElement('script');
+    fixScript.src = './feature-fixes.js?v=1';
+    fixScript.defer = true;
+    (document.head || document.documentElement).appendChild(fixScript);
+  } catch (error) {
+    console.warn('Feature fixes could not be loaded.', error);
+  }
 })();
