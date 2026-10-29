@@ -1868,7 +1868,7 @@ const applyPreset=(name,file,color,restore)=>{
    bgApi.clearMedia();const media=document.createElement('img');media.className='clk-bg-image';media.alt='';media.src=full;
    media.style.cssText='position:absolute!important;inset:0!important;z-index:1!important;width:100%!important;height:100%!important;object-fit:cover!important;display:block!important';
    bg.append(media);shell.classList.add('clk-shell--media');shell.style.setProperty('--clk-bg',color);shell.style.setProperty('--clk-bg-base',color);
-   media.style.opacity='1';bgApi.fgAuto=true;bgApi.applyAutoForeground();applyBlur();
+   media.style.opacity='1';if(bgApi.fgAuto)bgApi.applyAutoForeground();applyBlur();
    qa('.clk-bg-thumb[data-preset-name]',bgB).forEach(b=>b.classList.toggle('clk-bg-thumb--active',b.dataset.presetName===name));
    const clear=q('#clkBgClear',bgB);if(clear)clear.hidden=true;
    if(!restore)safeStore(PRESET_STORE,JSON.stringify({name:name,file:file,color:color}));
