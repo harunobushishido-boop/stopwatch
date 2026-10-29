@@ -477,11 +477,10 @@
   const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v3';
 
   function selectedWeatherProvider() {
-    try {
-      return localStorage.getItem(WEATHER_PROVIDER_KEY) === 'jma' ? 'jma' : 'open-meteo';
-    } catch (error) {
-      return 'open-meteo';
-    }
+    // User setting: the current observation always comes from JMA AMeDAS;
+    // forecasts always prefer Open-Meteo and fall back to JMA only on failure.
+    try { localStorage.setItem(WEATHER_PROVIDER_KEY, 'open-meteo'); } catch (error) {}
+    return 'open-meteo';
   }
 
   function installWeatherSourcePicker() {
@@ -506,11 +505,8 @@
         '<strong style="font-size:12.5px">天気予報の取得元</strong>' +
         '<span id="pcWeatherProviderStatus" aria-live="polite" style="font-size:11px;opacity:.78">Open-Meteoを優先</span>' +
       '</div>' +
-      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">Open-Meteoと気象庁を切り替えられます。選んだAPIで取得できない場合は、もう一方のAPIへ自動で切り替えます。</p>' +
-      '<div id="pcWeatherProviderOptions" style="display:flex;gap:8px;flex-wrap:wrap">' +
-        '<button type="button" data-weather-provider="open-meteo" aria-pressed="true" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">Open-Meteo</button>' +
-        '<button type="button" data-weather-provider="jma" aria-pressed="false" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">気象庁</button>' +
-      '</div>';
+      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">現在の気温・湿度・風速は気象庁アメダス、天気・時間帯予報・週間予報はOpen-Meteoを使用します。予報の取得に失敗した場合のみ、気象庁の予報に自動で切り替えます。</p>' +
+      '<div id="pcWeatherProviderOptions" style="display:none"></div>';
     const buttons = Array.from(panel.querySelectorAll('[data-weather-provider]'));
     const status = panel.querySelector('#pcWeatherProviderStatus');
     const updateButtons = function () {
@@ -535,7 +531,7 @@
     updateButtons();
     const note = document.querySelector('.clk-weather__source-note');
     if (note) {
-      note.textContent = '現在の気温・湿度・風速は気象庁アメダス、天気・時間帯予報・週間予報は選択した取得元（初期設定：Open-Meteo）を使用します。取得できない場合はもう一方の予報APIに自動で切り替えます。観測所は富沢小学校の敷地内とは限りません。';
+      note.textContent = '現在の気温・湿度・風速は地点に近い気象庁アメダス観測、天気・時間帯予報・週間予報はOpen-Meteoを使用します。Open-Meteoの予報を取得できない場合のみ気象庁の予報に自動で切り替えます。観測所は富沢小学校の敷地内とは限りません。';
     }
   }
 
@@ -624,9 +620,7 @@
   }
 
   async function getWeatherForecast(lat, lon, name, requestedProvider) {
-    const requested = requestedProvider === 'jma' || requestedProvider === 'open-meteo'
-      ? requestedProvider
-      : selectedWeatherProvider();
+    const requested = 'open-meteo';
     const first = requested === 'jma' ? getJmaForecastBase : getOpenMeteoForecast;
     const second = requested === 'jma' ? getOpenMeteoForecast : getJmaForecastBase;
     const firstName = requested === 'jma' ? '気象庁' : 'Open-Meteo';
