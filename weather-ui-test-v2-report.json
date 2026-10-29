@@ -1,9 +1,9 @@
 {
-  "ok": true,
+  "ok": false,
   "requested_operations": 1000,
-  "completed_operations": 1000,
-  "elapsed_ms": 9641,
-  "forecast_requests": 428,
+  "completed_operations": 0,
+  "elapsed_ms": 1107,
+  "forecast_requests": 1,
   "features": {
     "edit_address": true,
     "auto_manual_toggle": true,
@@ -11,7 +11,7 @@
     "zip_search": true
   },
   "browser_errors": [],
-  "failure": null,
+  "failure": "AssertionError [ERR_ASSERTION]: Open-Meteo source option should be present\n\n0 !== 1\n\n    at file:///home/runner/work/stopwatch/stopwatch/tests/weather-ui-v2-1000.mjs:70:10",
   "weather_debug": {
     "stats": [
       "61%",
@@ -27,5 +27,5 @@
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-29T08:32:33.769Z"
+  "timestamp": "2026-10-29T08:57:34.227Z"
 }
