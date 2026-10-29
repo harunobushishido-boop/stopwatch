@@ -2,7 +2,7 @@
   "ok": true,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 15023,
+  "elapsed_ms": 11274,
   "forecast_requests": 428,
   "features": {
     "edit_address": true,
@@ -23,9 +23,9 @@
     "condition": "くもり時々晴れ",
     "feels": "気象庁アメダスの観測値（観測時刻 2026-10-21 20:00）",
     "location": "仙台市立富沢小学校",
-    "providerStatus": "Open-Meteoを優先",
+    "providerStatus": "予報：Open-Meteo",
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-29T12:43:28.981Z"
+  "timestamp": "2026-10-29T13:06:12.606Z"
 }
