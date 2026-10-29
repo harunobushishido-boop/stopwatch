@@ -1243,8 +1243,9 @@ const LOCK_MS=20*60*1000, PRELOAD_MINUTES=15, START_GRACE_MS=15*60*1000;
 let busy=false,closing=false,channel=null,preloadVideo=null,preloadReady=false,fallbackPlayedDate='',fallbackLock=null,lastFailureAt=0;
 try{channel='BroadcastChannel' in window?new BroadcastChannel(CHANNEL_NAME):null}catch{}
 const pad=n=>String(n).padStart(2,'0');
-const dayKey=(d=new Date())=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
-const getTarget=(d=new Date())=>{const t=new Date(d);t.setHours(12,45,0,0);return t};
+const tokyoParts=(d=new Date())=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);const out={};parts.forEach(p=>{if(p.type!=='literal')out[p.type]=p.value});return out};
+const dayKey=(d=new Date())=>{const p=tokyoParts(d);return p.year+'-'+p.month+'-'+p.day};
+const getTarget=(d=new Date())=>{const p=tokyoParts(d);return new Date(Date.UTC(Number(p.year),Number(p.month)-1,Number(p.day),3,45,0,0))};
 const played=()=>{try{return localStorage.getItem(PLAYED_KEY)===dayKey()}catch{return fallbackPlayedDate===dayKey()}};
 const markPlayed=()=>{fallbackPlayedDate=dayKey();try{localStorage.setItem(PLAYED_KEY,dayKey())}catch{}};
 const readLock=()=>{try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')||fallbackLock}catch{return fallbackLock}};
@@ -1364,8 +1365,8 @@ const dueNow=()=>{
 };
 const check=()=>{ensurePreload();if(dueNow())playNow(false)};
 const scheduleExact=()=>{
-  const now=new Date(),target=getTarget(now);
-  if(target<=now)target.setDate(target.getDate()+1);
+  const now=new Date();let target=getTarget(now);
+  if(target<=now)target=new Date(target.getTime()+24*60*60*1000);
   const delay=Math.max(250,target-now);
   setTimeout(()=>{check();scheduleExact()},delay);
 };
@@ -1987,13 +1988,7 @@ q('#pcImportDataFile',exportGroup)?.addEventListener('change',async e=>{
   transferStatus('読み込みが完了しました。画面を再読み込みします。');setTimeout(()=>location.reload(),500);
  }catch(err){transferStatus('読み込めませんでした。対応するストップウォッチJSONバックアップを選んでください。')}
 });
-// Guard the central timer pause/resume click through a single stable state-toggle path.
-document.addEventListener('click',e=>{
- const button=e.target.closest('.clk-timer-circle__pause');if(!button)return;
- const circle=button.closest('.clk-timer-circle');if(!circle||!window.__clkTimerApi)return;
- const action=button.getAttribute('aria-label');if(action!=='停止'&&action!=='再開')return;e.preventDefault();e.stopImmediatePropagation();
- window.__clkTimerApi.setRunning(Number(circle.dataset.timerId),action==='再開');
-},true);
+// Let the timer circle's own pause/resume handler update state, icon and aria-label together.
 })();
 </script>
 <script id="pc-auto-background-contrast">(function(){'use strict';const shell=document.querySelector('.clk-shell'),api=window.__clkBgApi;if(!shell||!api)return;const applyOnlyWhenAutomatic=()=>{if(api.fgAuto)api.applyAutoForeground()};applyOnlyWhenAutomatic();let last=getComputedStyle(shell).getPropertyValue('--clk-bg').trim();const observer=new MutationObserver(function(){const next=getComputedStyle(shell).getPropertyValue('--clk-bg').trim();if(next!==last){last=next;applyOnlyWhenAutomatic();if(window.__clkSaveTheme)window.__clkSaveTheme()}});observer.observe(shell,{attributes:true,attributeFilter:['style']});document.addEventListener('click',function(event){const target=event.target&&event.target.closest&&event.target.closest('.clk-color-swatch--auto,.clk-palette-mini:not(.clk-palette-mini--special),.clk-bg-thumb');if(!target)return;setTimeout(function(){applyOnlyWhenAutomatic();if(window.__clkSaveTheme)window.__clkSaveTheme()},80)},true)})();</script><script id="pc-toolbar-button-fade">(function(){'use strict';const shell=document.querySelector('.clk-shell');const clear=function(){document.querySelectorAll('.clk-controls__btn.pc-toolbar-fade-feedback').forEach(function(b){b.classList.remove('pc-toolbar-fade-feedback')})};document.addEventListener('click',function(e){const b=e.target&&e.target.closest&&e.target.closest('.clk-controls__btn');if(!b)return;const wasActive=b.classList.contains('clk-controls__btn--active');clear();if(!wasActive)b.classList.add('pc-toolbar-fade-feedback')},true);if(shell&&'MutationObserver'in window)new MutationObserver(function(){if(!shell.classList.contains('clk-shell--panel-open'))clear()}).observe(shell,{attributes:true,attributeFilter:['class']});document.addEventListener('keydown',function(e){if(e.key==='Escape')clear()},true)})();</script>
