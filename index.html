@@ -1180,48 +1180,53 @@ try{
   if(fontSize){const v=fontSize.closest('.clk-group')?.querySelector('.clk-size-value');fontSize.addEventListener('input',()=>{if(v)v.textContent=Math.round(Number(fontSize.value)*100)+'%'});}
 }catch(e){}
 
-/* Background UI fix: one real photo/video switch, using the supplied reference layout. */
+/* Background UI fix v129: keep one switch controller and reliable file selection. */
 try{
-  const panesAll=[...document.querySelectorAll('.clk-panel__pane')],bgA=panesAll[4],photoPane=document.getElementById('bgB'),bgInput=window.__clkBgApi?.bgInput;
-  document.getElementById('ghBgTabs')?.remove();
-  if(bgA&&photoPane){
-    const innerOldTabs=photoPane.querySelector('.clk-segments');
-    innerOldTabs?.closest('.clk-group')?.remove();
-    const topGroup=[...bgA.children].find(x=>x.querySelector?.('.clk-segments'));
-    const topSegs=topGroup?.querySelectorAll('.clk-segment');
-    const foot=[...bgA.children].find(x=>x.classList?.contains('clk-panel__footnote'));
-    const paletteParts=[...bgA.children].filter(x=>x!==topGroup&&x!==photoPane&&x!==foot);
-    const setBgMode=(photo)=>{
-      if(topSegs?.length){
-        topSegs[0].classList.toggle('clk-segment--active',!photo);topSegs[0].setAttribute('aria-pressed',String(!photo));
-        topSegs[1].classList.toggle('clk-segment--active',photo);topSegs[1].setAttribute('aria-pressed',String(photo));
-      }
-      paletteParts.forEach(x=>x.style.display=photo?'none':'');
+  const allPanes=Array.from(document.querySelectorAll('.clk-panel__pane'));
+  const pane=allPanes[4], photoPane=document.getElementById('bgB'), bgApi=window.__clkBgApi;
+  if(pane&&photoPane){
+    photoPane.querySelector('.clk-segments')?.closest('.clk-group')?.remove();
+    const topGroup=Array.from(pane.children).find(el=>el.querySelector?.('.clk-segments'));
+    const tabs=topGroup?Array.from(topGroup.querySelectorAll('.clk-segment')):[];
+    const paletteTab=tabs.find(b=>b.textContent.replace(/\s/g,'')==='配色');
+    const photoTab=tabs.find(b=>b.textContent.replace(/\s/g,'')==='写真・動画');
+    const foot=Array.from(pane.children).find(el=>el.classList?.contains('clk-panel__footnote'));
+    const paletteParts=Array.from(pane.children).filter(el=>el!==topGroup&&el!==photoPane&&el!==foot);
+    const setMode=photo=>{
+      if(paletteTab){paletteTab.classList.toggle('clk-segment--active',!photo);paletteTab.setAttribute('aria-pressed',String(!photo))}
+      if(photoTab){photoTab.classList.toggle('clk-segment--active',photo);photoTab.setAttribute('aria-pressed',String(photo))}
+      paletteParts.forEach(el=>{el.style.display=photo?'none':''});
       photoPane.style.display=photo?'':'none';
       photoPane.setAttribute('aria-hidden',String(!photo));
     };
-    document.addEventListener('click',e=>{
-      const b=e.target.closest?.('.clk-segment');
-      if(!b||!bgA.contains(b)||!topGroup?.contains(b))return;
-      const isPhoto=b.textContent.replace(/\s/g,'')==='写真・動画';
-      const isPalette=b.textContent.replace(/\s/g,'')==='配色';
-      if(!isPhoto&&!isPalette)return;
-      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();setBgMode(isPhoto);
-    },true);
-    setBgMode(true);
-    if(bgInput){
-      bgInput.accept='image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v';
-      bgInput.style.display='none';bgInput.style.position='fixed';bgInput.style.width='1px';bgInput.style.height='1px';bgInput.style.opacity='0';bgInput.style.pointerEvents='none';
-      const add=document.getElementById('ghBgAddButton')||document.querySelector('#bgB .clk-bg-thumb--add');
+    if(topGroup&&!topGroup.dataset.gh129Bound){
+      topGroup.dataset.gh129Bound='1';
+      topGroup.addEventListener('click',e=>{
+        const b=e.target.closest?.('.clk-segment');if(!tabs.includes(b))return;
+        const label=b.textContent.replace(/\s/g,'');
+        if(label!=='配色'&&label!=='写真・動画')return;
+        e.preventDefault();e.stopPropagation();setMode(label==='写真・動画');
+      },true);
+    }
+    setMode(false);
+    const input=bgApi?.bgInput||photoPane.querySelector('input[type="file"]');
+    if(input){
+      input.accept='image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v';
+      input.style.cssText='position:fixed!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;display:block!important';
+      let add=document.getElementById('ghBgAddButton')||photoPane.querySelector('.clk-bg-thumb--add');
       if(add&&add.tagName!=='BUTTON'){
-        const btn=document.createElement('button');btn.id='ghBgAddButton';btn.type='button';btn.className=add.className;btn.setAttribute('aria-label','背景を追加');btn.title='写真または動画を選択';btn.innerHTML=add.innerHTML;add.replaceWith(btn);
+        const button=document.createElement('button');button.type='button';button.id='ghBgAddButton';button.className=add.className;
+        button.setAttribute('aria-label','背景を追加');button.title='写真または動画を選択';button.innerHTML=add.innerHTML;add.replaceWith(button);add=button;
       }
-      const addBtn=document.getElementById('ghBgAddButton');
-      addBtn?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();try{bgInput.value='';bgInput.click()}catch{toast('ファイル選択を開けませんでした。')}});
+      if(add&&!add.dataset.gh129Bound){
+        add.dataset.gh129Bound='1';add.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setMode(true);try{input.value='';input.click()}catch(err){console.warn(err)}});
+      }
+      if(!input.dataset.gh129Bound){
+        input.dataset.gh129Bound='1';input.addEventListener('change',()=>{setMode(true);setTimeout(()=>{const media=document.querySelector('.clk-bg-image,.clk-bg-video');if(media){media.style.setProperty('opacity','1','important');media.style.setProperty('z-index','1','important');media.style.setProperty('object-fit','cover','important')}},100)});
+      }
     }
   }
-}catch(e){console.warn('Background switch fix failed',e);}
-
+}catch(e){console.warn('背景タブの修正に失敗しました',e)}
 })();
 </script><style id="ghLunchVideoSchedulerStyle">
 #ghLunchVideoOverlay{position:fixed;inset:0;z-index:2147483647;background:#000;display:flex;align-items:center;justify-content:center;overscroll-behavior:none}
@@ -1992,74 +1997,49 @@ document.addEventListener('click',e=>{
 })();
 </script>
 <script id="pc-auto-background-contrast">(function(){'use strict';const shell=document.querySelector('.clk-shell'),api=window.__clkBgApi;if(!shell||!api)return;const applyOnlyWhenAutomatic=()=>{if(api.fgAuto)api.applyAutoForeground()};applyOnlyWhenAutomatic();let last=getComputedStyle(shell).getPropertyValue('--clk-bg').trim();const observer=new MutationObserver(function(){const next=getComputedStyle(shell).getPropertyValue('--clk-bg').trim();if(next!==last){last=next;applyOnlyWhenAutomatic();if(window.__clkSaveTheme)window.__clkSaveTheme()}});observer.observe(shell,{attributes:true,attributeFilter:['style']});document.addEventListener('click',function(event){const target=event.target&&event.target.closest&&event.target.closest('.clk-color-swatch--auto,.clk-palette-mini:not(.clk-palette-mini--special),.clk-bg-thumb');if(!target)return;setTimeout(function(){applyOnlyWhenAutomatic();if(window.__clkSaveTheme)window.__clkSaveTheme()},80)},true)})();</script><script id="pc-toolbar-button-fade">(function(){'use strict';const shell=document.querySelector('.clk-shell');const clear=function(){document.querySelectorAll('.clk-controls__btn.pc-toolbar-fade-feedback').forEach(function(b){b.classList.remove('pc-toolbar-fade-feedback')})};document.addEventListener('click',function(e){const b=e.target&&e.target.closest&&e.target.closest('.clk-controls__btn');if(!b)return;const wasActive=b.classList.contains('clk-controls__btn--active');clear();if(!wasActive)b.classList.add('pc-toolbar-fade-feedback')},true);if(shell&&'MutationObserver'in window)new MutationObserver(function(){if(!shell.classList.contains('clk-shell--panel-open'))clear()}).observe(shell,{attributes:true,attributeFilter:['class']});document.addEventListener('keydown',function(e){if(e.key==='Escape')clear()},true)})();</script>
-<script id="ghAllInOneFix-v128">
+<script id="ghAllInOneFix-v129">
 (()=>{'use strict';
-const q=(s,r=document)=>r.querySelector(s);
-const queryAll=(s,r=document)=>Array.from(r.querySelectorAll(s));
-const bgApi=window.__clkBgApi, shell=q('.clk-shell');
+const q=(s,r=document)=>r.querySelector(s), all=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const shell=q('.clk-shell'), bgApi=window.__clkBgApi;
 const style=document.createElement('style');style.id='ghAllInOneFixStyles';
-style.textContent='#timeAnalysisRoot.gh-ta,#timeAnalysisRoot.gh-ta *{color:#000!important}#timeAnalysisRoot.gh-ta .gh-ta-btn-primary,#timeAnalysisRoot.gh-ta .gh-ta-btn-primary *{color:#fff!important}.clk-bg-image,.clk-bg-video{opacity:1!important}.clk-bg-overlay{background:transparent!important;opacity:1!important}#bgB .clk-bg-thumb--add{cursor:pointer}';
+style.textContent='#timeAnalysisRoot.gh-ta,#timeAnalysisRoot.gh-ta *{color:#000!important}#timeAnalysisRoot.gh-ta .gh-ta-btn-primary,#timeAnalysisRoot.gh-ta .gh-ta-btn-primary *{color:#fff!important}.clk-bg-image,.clk-bg-video{opacity:1!important;z-index:1!important;object-fit:cover!important}.clk-bg-overlay{background:transparent!important;opacity:1!important}.clk-bg{background:transparent!important}';
 document.head.append(style);
-/* Fix photo/video switch by targeting the real background pane and controls. */
-const photoPane=q('#bgB');
-const bgPane=photoPane?.closest('.clk-panel__pane');
-if(bgPane&&photoPane){
- const topGroup=Array.from(bgPane.querySelectorAll('.clk-group')).find(g=>Array.from(g.querySelectorAll('.clk-segment')).some(b=>/写真・動画/.test(b.textContent)));
- const tabs=topGroup?Array.from(topGroup.querySelectorAll('.clk-segment')):[];
- const photoTab=tabs.find(b=>b.textContent.replace(/\s/g,'')==='写真・動画');
- const paletteTab=tabs.find(b=>b.textContent.replace(/\s/g,'')==='配色');
- const setMode=photo=>{
-  if(photoTab){photoTab.classList.toggle('clk-segment--active',photo);photoTab.setAttribute('aria-pressed',String(photo))}
-  if(paletteTab){paletteTab.classList.toggle('clk-segment--active',!photo);paletteTab.setAttribute('aria-pressed',String(!photo))}
-  photoPane.style.display=photo?'':'none';photoPane.setAttribute('aria-hidden',String(!photo));
-  Array.from(bgPane.children).forEach(child=>{if(child!==topGroup&&child!==photoPane&&!child.classList.contains('clk-panel__footnote'))child.style.display=photo?'none':''});
- };
- if(topGroup){topGroup.addEventListener('click',e=>{const b=e.target.closest('.clk-segment');if(!tabs.includes(b))return;if(b===photoTab){e.preventDefault();setMode(true)}else if(b===paletteTab){e.preventDefault();setMode(false)}},true);setMode(false)}
- const input=bgApi?.bgInput||q('input[type="file"]',photoPane);
- if(input){
-  input.accept='image/*,video/mp4,video/webm,video/quicktime,.mov,.m4v';
-  input.style.cssText='position:fixed!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important;display:block!important';
-  let add=q('#ghBgAddButton',photoPane)||q('.clk-bg-thumb--add',photoPane);
-  if(add&&add.tagName!=='BUTTON'){const btn=document.createElement('button');btn.type='button';btn.id='ghBgAddButton';btn.className=add.className;btn.title='写真または動画を選択';btn.setAttribute('aria-label','背景を追加');btn.innerHTML=add.innerHTML;add.replaceWith(btn);add=btn}
-  if(add&&!add.dataset.ghFixBound){add.dataset.ghFixBound='1';add.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();setMode(true);input.value='';input.click()})}
-  input.addEventListener('change',()=>{setMode(true);setTimeout(()=>{const media=q('.clk-bg-image,.clk-bg-video');if(media){media.style.setProperty('opacity','1','important');media.style.setProperty('z-index','1','important');media.style.setProperty('object-fit','cover','important');if(bgApi){try{bgApi.fgAuto=true;bgApi.applyAutoForeground()}catch(e){}}}},150)});
- }
-}
-/* Make uploaded/preset media opaque and refresh automatic text contrast on load. */
-const bg=q('.clk-bg');
+/* Ensure image/video backgrounds are fully opaque; keep app content above the media. */
 const fixMedia=media=>{
  if(!(media instanceof HTMLImageElement||media instanceof HTMLVideoElement))return;
  media.style.setProperty('opacity','1','important');media.style.setProperty('z-index','1','important');media.style.setProperty('object-fit','cover','important');
- const refresh=()=>{if(bgApi){try{bgApi.fgAuto=true;bgApi.applyAutoForeground()}catch(e){}}};
- if(!media.dataset.ghContrastBound){media.dataset.ghContrastBound='1';media.addEventListener(media instanceof HTMLVideoElement?'loadeddata':'load',refresh,{once:true});if(media instanceof HTMLVideoElement)media.addEventListener('timeupdate',()=>{if(bgApi?.fgAuto)refresh()})}
 };
-if(bg){queryAll('.clk-bg-image,.clk-bg-video',bg).forEach(fixMedia);new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1){fixMedia(n);queryAll('.clk-bg-image,.clk-bg-video',n).forEach(fixMedia)}}))).observe(bg,{childList:true,subtree:true})}
-/* Check the sleep deadline even after a background tab is throttled. */
+const bg=q('.clk-bg');
+if(bg){
+ all('.clk-bg-image,.clk-bg-video',bg).forEach(fixMedia);
+ new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1){fixMedia(n);all('.clk-bg-image,.clk-bg-video',n).forEach(fixMedia)}}))).observe(bg,{childList:true,subtree:true});
+}
+/* Default cleaning analysis is black, including text inserted after this patch. */
+const forceAnalysisBlack=()=>{
+ const root=q('#timeAnalysisRoot')||q('.gh-ta');
+ if(root){root.style.setProperty('color','#000','important');all('*',root).forEach(el=>{if(!el.matches('.gh-ta-btn-primary,.gh-ta-btn-primary *'))el.style.setProperty('color','#000','important')});all('.gh-ta-btn-primary,.gh-ta-btn-primary *',root).forEach(el=>el.style.setProperty('color','#fff','important'))}
+};
+forceAnalysisBlack();new MutationObserver(forceAnalysisBlack).observe(document.body,{childList:true,subtree:true});
+/* Sleep timer enforcement: stop local files, ambient audio, and YouTube; do not stop the background video. */
 const sleepKey='pc-music-sleep-end';
-const enforceSleepDeadline=()=>{
+const enforceSleep=()=>{
  let end=0;try{end=Number(localStorage.getItem(sleepKey)||0)}catch(e){}
  if(!end||Date.now()<end)return;
  try{window.__clkMusicApi?.stopPlayback?.()}catch(e){}
  try{window.__clkStopBuiltInSounds?.()}catch(e){}
- queryAll('audio,iframe[src*="youtube.com"],iframe[src*="youtube-nocookie.com"]').forEach(el=>{try{if(el.tagName==='AUDIO'){el.pause();el.currentTime=0}else el.src='about:blank'}catch(e){}});
- const yt=q('#ytf');if(yt){queryAll('iframe',yt).forEach(f=>{try{f.src='about:blank'}catch(e){}});yt.replaceChildren();yt.style.display='none'}
+ all('audio,video:not(.clk-bg-video)').forEach(el=>{try{el.pause();el.currentTime=0}catch(e){}});
+ all('iframe[src*="youtube.com"],iframe[src*="youtube-nocookie.com"]').forEach(el=>{try{el.src='about:blank'}catch(e){}});
+ const yt=q('#ytf');if(yt){all('iframe',yt).forEach(el=>{try{el.src='about:blank'}catch(e){}});yt.replaceChildren();yt.style.display='none'}
  try{localStorage.removeItem(sleepKey)}catch(e){}
  const status=q('#pcMusicSleepStatus');if(status)status.textContent='再生を停止しました';
- const options=q('#pcMusicSleepOptions');if(options)queryAll('.clk-segment',options).forEach(b=>b.classList.toggle('clk-segment--active',Number(b.dataset.minutes)===0));
+ const options=q('#pcMusicSleepOptions');if(options)all('.clk-segment',options).forEach(b=>b.classList.toggle('clk-segment--active',Number(b.dataset.minutes)===0));
 };
-setInterval(enforceSleepDeadline,1000);document.addEventListener('visibilitychange',enforceSleepDeadline);window.addEventListener('pageshow',enforceSleepDeadline);
-/* Restore the previous color combo without including any uploaded media. */
-const PREV='pc-bg-prev-v1';
-document.addEventListener('click',e=>{
- const b=e.target.closest('#pcBgPrevious');if(!b)return;
- let old=null;try{old=JSON.parse(localStorage.getItem(PREV)||'null')}catch(e){}
- if(!old)return;
- const current=shell?{bg:getComputedStyle(shell).getPropertyValue('--clk-bg').trim()||'#F4EFE3',fg:getComputedStyle(shell).getPropertyValue('--clk-fg').trim()||'#000000',accent:getComputedStyle(shell).getPropertyValue('--clk-accent').trim()||'#F59E0B',fgAuto:!!bgApi?.fgAuto}:null;
- if(current){try{localStorage.setItem(PREV,JSON.stringify(current))}catch(e){}}
- e.preventDefault();e.stopPropagation();if(bgApi){try{bgApi.clearMedia()}catch(e){}}
- if(shell){const color=old.bg||'#F4EFE3';shell.style.setProperty('--clk-bg',color);shell.style.setProperty('--clk-bg-base',color);shell.style.setProperty('--clk-accent',old.accent||'#F59E0B');shell.style.setProperty('--clk-accent-base',old.accent||'#F59E0B');if(bgApi){bgApi.fgAuto=old.fgAuto!==false;if(bgApi.fgAuto)bgApi.applyAutoForeground();else bgApi.setForeground(old.fg||'#000000',false,null)}window.__clkSaveTheme?.()}
- const status=q('#pcBgFavStatus');if(status)status.textContent='ひとつ前の配色に戻しました。';
-},true);
+setInterval(enforceSleep,1000);document.addEventListener('visibilitychange',enforceSleep);window.addEventListener('pageshow',enforceSleep);
+/* Favorite palette records are color-only and capped at 12. */
+try{
+ const key='pc-bg-favs-v1';let list=JSON.parse(localStorage.getItem(key)||'[]');
+ if(Array.isArray(list)){list=list.filter(x=>x&&typeof x.bg==='string'&&typeof x.accent==='string').slice(-12);localStorage.setItem(key,JSON.stringify(list.map(x=>({name:String(x.name||''),bg:x.bg,fg:x.fg||'#000000',accent:x.accent,fgAuto:false}))));}
+}catch(e){}
 })();
 </script>
 </body></html>
