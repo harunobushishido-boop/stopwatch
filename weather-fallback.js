@@ -476,12 +476,9 @@
 
   const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v4';
 
+  // Current observations always come from JMA AMeDAS; forecasts use Open-Meteo by default.
   function selectedWeatherProvider() {
-    try {
-      return localStorage.getItem(WEATHER_PROVIDER_KEY) === 'jma' ? 'jma' : 'open-meteo';
-    } catch (error) {
-      return 'open-meteo';
-    }
+    return 'open-meteo';
   }
 
   function installWeatherSourcePicker() {
@@ -503,14 +500,16 @@
     panel.dataset.providerPickerReady = '1';
     panel.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-        '<strong style="font-size:12.5px">天気予報の取得元</strong>' +
-        '<span id="pcWeatherProviderStatus" aria-live="polite" style="font-size:11px;opacity:.78">Open-Meteoを優先</span>' +
+        '<strong style="font-size:12.5px">天気データの取得元</strong>' +
+        '<span id="pcWeatherProviderStatus" aria-live="polite" style="font-size:11px;opacity:.78">予報：Open-Meteo</span>' +
       '</div>' +
-      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">現在の気温・湿度・風速は気象庁アメダスから取得し、予報はOpen-Meteoを初期設定にします。必要に応じて予報の取得元を切り替えられ、取得に失敗した場合はもう一方へ自動で切り替えます。</p>' +
+      '<p style="font-size:11.5px;line-height:1.55;opacity:.78;margin:8px 0 10px">現在の気温・湿度・風速は気象庁アメダスから取得し、予報はOpen-Meteoを初期設定にします。Open-Meteoの予報取得に失敗した場合は気象庁の予報を代替表示します。</p>' +
       '<div id="pcWeatherProviderOptions" style="display:flex;gap:8px;flex-wrap:wrap">' +
         '<button type="button" data-weather-provider="open-meteo" aria-pressed="true" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">Open-Meteo</button>' +
         '<button type="button" data-weather-provider="jma" aria-pressed="false" style="padding:8px 12px;border:1px solid currentColor;border-radius:9px;background:transparent;color:inherit;font:inherit;font-size:12px;font-weight:600;cursor:pointer">気象庁</button>' +
       '</div>';
+    const providerOptions = panel.querySelector('#pcWeatherProviderOptions');
+    if (providerOptions) providerOptions.innerHTML = '<span style="font-size:12px;font-weight:600;line-height:1.5">予報：Open-Meteo（取得に失敗した場合は気象庁を代替）</span>';
     const buttons = Array.from(panel.querySelectorAll('[data-weather-provider]'));
     const status = panel.querySelector('#pcWeatherProviderStatus');
     const updateButtons = function () {
@@ -522,7 +521,7 @@
         button.style.color = active ? '#fff' : 'var(--clk-fg, #222)';
         button.style.borderColor = active ? 'var(--clk-accent, #4A6FA5)' : 'currentColor';
       });
-      if (status) status.textContent = provider === 'jma' ? '気象庁を優先' : 'Open-Meteoを優先';
+      if (status) status.textContent = provider === 'jma' ? '気象庁を優先' : '予報：Open-Meteo';
     };
     buttons.forEach(function (button) {
       button.addEventListener('click', function () {
@@ -535,7 +534,7 @@
     updateButtons();
     const note = document.querySelector('.clk-weather__source-note');
     if (note) {
-      note.textContent = '現在の気温・湿度・風速は地点に近い気象庁アメダス観測、天気・時間帯予報・週間予報は選択した取得元（初期設定：Open-Meteo）を使用します。予報APIの取得に失敗した場合はもう一方へ自動で切り替えます。観測所は富沢小学校の敷地内とは限りません。';
+      note.textContent = '現在の気温・湿度・風速は地点に近い気象庁アメダス観測、天気・時間帯予報・週間予報はOpen-Meteoを使用します。予報の取得に失敗した場合は気象庁の予報を代替表示します。観測所は富沢小学校の敷地内とは限りません。';
     }
   }
 
@@ -624,9 +623,8 @@
   }
 
   async function getWeatherForecast(lat, lon, name, requestedProvider) {
-    const requested = requestedProvider === 'jma' || requestedProvider === 'open-meteo'
-      ? requestedProvider
-      : selectedWeatherProvider();
+    // Do not let an older stored preference or caller override the requested provider split.
+    const requested = 'open-meteo';
     const first = requested === 'jma' ? getJmaForecastBase : getOpenMeteoForecast;
     const second = requested === 'jma' ? getOpenMeteoForecast : getJmaForecastBase;
     const firstName = requested === 'jma' ? '気象庁' : 'Open-Meteo';
@@ -674,7 +672,7 @@
   // Load the small post-parse fixes separately so the large reference HTML stays untouched.
   try {
     const fixScript = document.createElement('script');
-    fixScript.src = './feature-fixes.js?v=1';
+    fixScript.src = './feature-fixes.js?v=2';
     fixScript.defer = true;
     (document.head || document.documentElement).appendChild(fixScript);
   } catch (error) {
