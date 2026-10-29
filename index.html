@@ -2014,12 +2014,7 @@ if(bg){
  all('.clk-bg-image,.clk-bg-video',bg).forEach(fixMedia);
  new MutationObserver(records=>records.forEach(r=>r.addedNodes.forEach(n=>{if(n.nodeType===1){fixMedia(n);all('.clk-bg-image,.clk-bg-video',n).forEach(fixMedia)}}))).observe(bg,{childList:true,subtree:true});
 }
-/* Default cleaning analysis is black, including text inserted after this patch. */
-const forceAnalysisBlack=()=>{
- const root=q('#timeAnalysisRoot')||q('.gh-ta');
- if(root){root.style.setProperty('color','#000','important');all('*',root).forEach(el=>{if(!el.matches('.gh-ta-btn-primary,.gh-ta-btn-primary *'))el.style.setProperty('color','#000','important')});all('.gh-ta-btn-primary,.gh-ta-btn-primary *',root).forEach(el=>el.style.setProperty('color','#fff','important'))}
-};
-forceAnalysisBlack();new MutationObserver(forceAnalysisBlack).observe(document.body,{childList:true,subtree:true});
+/* Cleaning analysis uses black text by default; primary buttons retain white text via the stylesheet. */
 /* Sleep timer enforcement: stop local files, ambient audio, and YouTube; do not stop the background video. */
 const sleepKey='pc-music-sleep-end';
 const enforceSleep=()=>{
