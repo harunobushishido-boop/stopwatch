@@ -474,7 +474,7 @@
   }
 
 
-  const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v2';
+  const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v3';
 
   function selectedWeatherProvider() {
     try {
