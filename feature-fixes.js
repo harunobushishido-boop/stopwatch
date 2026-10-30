@@ -165,6 +165,19 @@
         fgAuto: false
       };
     };
+    const isLightColor = function (value) {
+      const probe = document.createElement('span');
+      probe.style.cssText = 'position:fixed;visibility:hidden;color:' + value;
+      document.body.appendChild(probe);
+      const match = getComputedStyle(probe).color.match(/rgba?\\(\\s*([\\d.]+)[, ]+\\s*([\\d.]+)[, ]+\\s*([\\d.]+)/i);
+      probe.remove();
+      if (!match) return true;
+      const channels = [Number(match[1]), Number(match[2]), Number(match[3])].map(function (channel) {
+        channel /= 255;
+        return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+      });
+      return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722 > 0.5;
+    };
     const readFavorites = function () {
       try {
         const list = JSON.parse(safeRead(FAV_KEY, '[]'));
@@ -245,7 +258,7 @@
         shell.style.setProperty('--clk-fg-base', snapshot.fg);
       }
       shell.classList.remove('clk-shell--media', 'clk-shell--auto-media');
-      shell.classList.toggle('clk-shell--light', true);
+      shell.classList.toggle('clk-shell--light', isLightColor(snapshot.bg));
       if (bgPane) {
         all('.clk-palette-mini:not(.clk-palette-mini--special)', bgPane).forEach(function (button) {
           const chosen = button.style.backgroundColor && button.style.backgroundColor.toLowerCase() === snapshot.bg.toLowerCase();
