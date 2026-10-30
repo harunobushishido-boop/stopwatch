@@ -169,7 +169,7 @@
       const probe = document.createElement('span');
       probe.style.cssText = 'position:fixed;visibility:hidden;color:' + value;
       document.body.appendChild(probe);
-      const match = getComputedStyle(probe).color.match(/rgba?\\(\\s*([\\d.]+)[, ]+\\s*([\\d.]+)[, ]+\\s*([\\d.]+)/i);
+      const match = getComputedStyle(probe).color.match(/rgba?\(\s*([\d.]+)[, ]+\s*([\d.]+)[, ]+\s*([\d.]+)/i);
       probe.remove();
       if (!match) return true;
       const channels = [Number(match[1]), Number(match[2]), Number(match[3])].map(function (channel) {
