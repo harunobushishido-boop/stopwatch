@@ -366,6 +366,7 @@
       stations.sort((a, b) => distanceKm(lat, lon, a.lat, a.lon) - distanceKm(lat, lon, b.lat, b.lon));
 
       let found = null;
+      let nearestWithTemperature = null;
       for (const item of stations) {
         const data = map[item.code] || {};
         const observation = {
@@ -378,11 +379,17 @@
           wind: amedasValue(data.wind),
           precipitation1h: amedasValue(data.precipitation1h)
         };
-        if (observation.temp !== '' || observation.humidity !== '' || observation.wind !== '') {
+        if (!found && (observation.temp !== '' || observation.humidity !== '' || observation.wind !== '')) {
           found = observation;
+        }
+        // Current temperature must be an actual JMA AMeDAS temperature observation.
+        // Skip closer stations whose temperature field is currently missing.
+        if (observation.temp !== '') {
+          nearestWithTemperature = observation;
           break;
         }
       }
+      found = nearestWithTemperature || found;
       if (!found) throw new Error('地点に近いアメダスの最新観測データが見つかりませんでした。');
       try { localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), observation: found })); } catch (error) {}
       return found;
@@ -476,14 +483,15 @@
 
   const WEATHER_PROVIDER_KEY = 'pc-weather-provider-v4';
 
-  const WEATHER_PROVIDER_MIGRATION_KEY = 'pc-weather-provider-default-migrated-v1';
+  const WEATHER_PROVIDER_MIGRATION_KEY = 'pc-weather-provider-default-migrated-v2';
   try {
-    if (localStorage.getItem(WEATHER_PROVIDER_MIGRATION_KEY) !== '1') {
+    // This release resets any older JMA-forecast preference to the requested Open-Meteo default.
+    if (localStorage.getItem(WEATHER_PROVIDER_MIGRATION_KEY) !== '2') {
       localStorage.setItem(WEATHER_PROVIDER_KEY, 'open-meteo');
-      localStorage.setItem(WEATHER_PROVIDER_MIGRATION_KEY, '1');
+      localStorage.setItem(WEATHER_PROVIDER_MIGRATION_KEY, '2');
     }
   } catch (_) {}
-  // Initial visits migrate to Open-Meteo; future explicit choices remain available.
+  // Current observations always come from JMA AMeDAS; the default forecast provider is Open-Meteo.
   function selectedWeatherProvider() {
     try {
       return localStorage.getItem(WEATHER_PROVIDER_KEY) === 'jma' ? 'jma' : 'open-meteo';
@@ -682,7 +690,7 @@
   // Load the small post-parse fixes separately so the large reference HTML stays untouched.
   try {
     const fixScript = document.createElement('script');
-    fixScript.src = './feature-fixes.js?v=3';
+    fixScript.src = './feature-fixes.js?v=4';
     fixScript.defer = true;
     (document.head || document.documentElement).appendChild(fixScript);
   } catch (error) {
