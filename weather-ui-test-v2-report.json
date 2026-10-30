@@ -2,7 +2,7 @@
   "ok": true,
   "requested_operations": 1000,
   "completed_operations": 1000,
-  "elapsed_ms": 8379,
+  "elapsed_ms": 14817,
   "forecast_requests": 428,
   "features": {
     "edit_address": true,
@@ -16,8 +16,8 @@
     "stats": [
       "61%",
       "4.0 m/s",
-      "05:59",
-      "16:42"
+      "06:00",
+      "16:40"
     ],
     "sourceNote": "現在の観測：気象庁アメダス・仙台（約0.0km） 2026-10-21 20:00／天気・時間帯予報・週間予報：Open-Meteo。学校敷地そのものの観測値ではありません。",
     "condition": "くもり時々晴れ",
@@ -27,5 +27,5 @@
     "selectedProvider": "open-meteo",
     "helperLoaded": true
   },
-  "timestamp": "2026-10-29T13:09:37.944Z"
+  "timestamp": "2026-10-30T06:03:39.423Z"
 }
