@@ -254,6 +254,14 @@
     time.type = 'time';
 
     fields = { classes, kind, special, items, extra, time };
+    // The shared source is the pre-existing link; this panel displays its values.
+    // Editing happens in that original note so local-only changes are not mistaken for shared writes.
+    classes.disabled = true;
+    kind.disabled = true;
+    special.readOnly = true;
+    items.readOnly = true;
+    extra.readOnly = true;
+    time.readOnly = true;
     scheduleGrid.append(
       makeField('授業時間数', classes),
       makeField('区分', kind),
@@ -271,10 +279,11 @@
     noteField = document.createElement('textarea');
     noteField.rows = 7;
     noteField.maxLength = MAX_NOTE_LENGTH;
-    noteField.placeholder = 'みんなに伝えたい連絡、メモ、持ち物の補足などを入力してください。';
+    noteField.placeholder = '共有ノート本文は以前からの共有リンクで確認してください。';
+    noteField.readOnly = true;
     noteField.style.cssText = 'display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:10px;border:1px solid var(--clk-border,currentColor);border-radius:10px;background:var(--clk-bg);color:var(--clk-fg);font:inherit;line-height:1.6;resize:vertical';
     const noteLabel = document.createElement('label');
-    noteLabel.textContent = 'ノート本文';
+    noteLabel.textContent = '共有ノートの補足';
     noteLabel.style.cssText = 'display:block;font-size:12px;font-weight:600';
     noteLabel.appendChild(noteField);
     noteSection.appendChild(noteLabel);
@@ -335,7 +344,7 @@
     const footnote = pane.querySelector('.clk-panel__footnote');
     group.append(title, description, statusNode, errorNode, scheduleGrid, noteSection, actions, shareHelp, linkNote);
     pane.insertBefore(group, footnote || null);
-    setStatus('以前からの共有ノートを読み込んでいます…');
+    setStatus('以前からの共有ノートを1秒ごとに確認しています…');
 
     window.PC_SHARED_NOTE = {
       getState: currentState,
