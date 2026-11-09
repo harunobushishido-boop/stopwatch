@@ -5,6 +5,7 @@
   // No note creation, export, editing, or share-link generation is provided here.
   const SHARED_NOTE_CONFIGURED = true;
   let statusNode = null;
+  let indicatorNode = null;
   let detailNode = null;
 
   function updateStatus(detail) {
@@ -12,6 +13,7 @@
     if (!detail || detail.ok !== false) {
       statusNode.textContent = '設定済み';
       statusNode.style.color = '#15803d';
+      if (indicatorNode) indicatorNode.style.background = '#15803d';
       if (detailNode) {
         detailNode.textContent = detail && detail.checkedAt
           ? '既存の共有ノートを確認済みです。1秒ごとに自動確認しています。'
@@ -22,6 +24,7 @@
 
     statusNode.textContent = '設定済み';
     statusNode.style.color = '#b45309';
+    if (indicatorNode) indicatorNode.style.background = '#b45309';
     if (detailNode) {
       detailNode.textContent = '登録済みの共有ノートに接続できていません。元の共有ノートの公開閲覧設定とネットワークを確認してください。';
     }
@@ -47,6 +50,7 @@
     row.style.cssText = 'display:flex;align-items:center;gap:9px;margin-top:9px';
 
     const indicator = document.createElement('span');
+    indicatorNode = indicator;
     indicator.setAttribute('aria-hidden', 'true');
     indicator.style.cssText = 'display:inline-block;width:10px;height:10px;flex:0 0 10px;border-radius:50%;background:#15803d';
 
