@@ -2,6 +2,7 @@
   'use strict';
 
   const NOTE_STORAGE_KEY = 'pc-shared-note-v1';
+  const SHARED_NOTE_URL = 'https://docs.google.com/spreadsheets/d/1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ/edit?usp=sharing';
   const SCHEDULE_ROWS_KEY = 'pc-schedule-export-rows-v1';
   const HEADERS = [
     '授業時間数',
@@ -18,9 +19,7 @@
   let statusNode = null;
   let errorNode = null;
   let noteField = null;
-  let shareUrlField = null;
   let fields = {};
-  let importedShare = false;
 
   const button = (label, primary) => {
     const element = document.createElement('button');
@@ -142,70 +141,6 @@
     }
   }
 
-  function encodeState(state) {
-    const bytes = new TextEncoder().encode(JSON.stringify(state));
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
-    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-  }
-
-  function decodeState(token) {
-    if (!token || token.length > 250000) throw new Error('共有リンクのデータが大きすぎるか、空です。');
-    const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    const parsed = JSON.parse(new TextDecoder().decode(bytes));
-    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.row)) {
-      throw new Error('共有ノートの形式を確認できません。');
-    }
-    return {
-      version: 1,
-      title: '共有ノート',
-      note: safeText(parsed.note, MAX_NOTE_LENGTH),
-      row: normalizeRow(parsed.row),
-      updatedAt: Number(parsed.updatedAt) || Date.now()
-    };
-  }
-
-  function sharedStateFromUrl() {
-    const hash = String(window.location.hash || '').replace(/^#/, '');
-    if (!hash) return null;
-    const params = new URLSearchParams(hash);
-    const token = params.get('shared-note');
-    if (!token) return null;
-    return decodeState(token);
-  }
-
-  function shareUrl() {
-    const url = new URL(window.location.href);
-    url.hash = 'shared-note=' + encodeState(currentState());
-    return url.toString();
-  }
-
-  async function copyShareLink() {
-    setError('');
-    persist(false);
-    const url = shareUrl();
-    if (shareUrlField) shareUrlField.value = url;
-
-    try {
-      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        await navigator.clipboard.writeText(url);
-        setStatus('共有リンクを作成してコピーしました。リンクを知っている人は内容を読み取れます。');
-        return;
-      }
-    } catch (error) {
-      // Show the link below so it can still be selected and copied manually.
-    }
-    if (shareUrlField) {
-      shareUrlField.focus();
-      shareUrlField.select();
-    }
-    setStatus('共有リンクを作成しました。下の欄を選択してコピーしてください。');
-  }
-
   function downloadText() {
     const state = currentState();
     const lines = [
@@ -290,7 +225,7 @@
     const description = document.createElement('p');
     description.className = 'clk-group__hint';
     description.style.cssText = 'margin:7px 0 10px;line-height:1.65';
-    description.textContent = 'Googleログインやスプレッドシートのアクセス権は不要です。予定・持ち物・メモはこの端末に自動保存され、共有リンクで内容を渡せます。';
+    description.textContent = '以前から使っている固定の共有ノートを読み込みます。Googleログインは不要です。共有ノートの内容は1秒ごとに確認し、自動音声発表と大きな画面表示に使います。';
 
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:8px 0;font-size:12.5px;line-height:1.5';
@@ -346,40 +281,26 @@
 
     const actions = document.createElement('div');
     actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin-top:12px';
-    const saveButton = button('今すぐ保存', true);
     const announceButton = button('音声で発表', true);
-    const shareButton = button('共有リンクを作成・コピー');
+    const openSharedNoteButton = button('以前の共有ノートを開く');
     const downloadButton = button('テキスト保存');
-    actions.append(saveButton, announceButton, shareButton, downloadButton);
+    actions.append(announceButton, openSharedNoteButton, downloadButton);
 
     const shareHelp = document.createElement('p');
     shareHelp.className = 'clk-group__hint';
     shareHelp.style.cssText = 'margin:10px 0 5px;line-height:1.6';
-    shareHelp.textContent = '共有リンクには、作成時点のノート内容が含まれます。リンクを知っている人は内容を読めます。相手の編集内容は自動同期されないため、更新を共有するときは新しいリンクを作成してください。';
+    shareHelp.textContent = '共有ノートは以前からの固定リンクを使います。新しいリンクは作成しません。リンク先が「リンクを知っている全員が閲覧可」に設定されていれば、Googleログインなしで読み取りできます。';
 
-    shareUrlField = document.createElement('input');
-    shareUrlField.type = 'url';
-    shareUrlField.readOnly = true;
-    shareUrlField.placeholder = '共有リンクを作成するとここに表示されます';
-    shareUrlField.setAttribute('aria-label', '共有リンク');
-    shareUrlField.style.cssText = 'display:block;box-sizing:border-box;width:100%;min-width:0;margin-top:5px;padding:9px;border:1px solid var(--clk-border,currentColor);border-radius:8px;background:var(--clk-bg);color:var(--clk-fg);font:inherit;font-size:12px';
+    const linkNote = document.createElement('p');
+    linkNote.style.cssText = 'margin:6px 0 0;font-size:12px;overflow-wrap:anywhere';
+    linkNote.textContent = SHARED_NOTE_URL;
 
-    saveButton.addEventListener('click', () => persist(true));
     announceButton.addEventListener('click', announce);
-    shareButton.addEventListener('click', copyShareLink);
+    openSharedNoteButton.addEventListener('click', () => window.open(SHARED_NOTE_URL, '_blank', 'noopener,noreferrer'));
     downloadButton.addEventListener('click', downloadText);
 
-    const imported = (() => {
-      try { return sharedStateFromUrl(); }
-      catch (error) { setTimeout(() => setError('共有リンクを読み込めませんでした。' + String(error.message || error)), 0); return null; }
-    })();
-    const initial = imported || readState();
+    const initial = readState();
     applyState(initial);
-    if (imported) {
-      importedShare = true;
-      const saved = persist(false);
-      setStatus(saved.saved ? '共有リンクの内容を読み込み、この端末にも保存しました。' : '共有リンクの内容を読み込みましたが、端末には保存できませんでした。');
-    }
 
     const onEdit = () => persist(false);
     Object.values(fields).forEach(field => {
@@ -402,16 +323,24 @@
       }
     };
     window.addEventListener('storage', syncFromOtherTab);
+    window.addEventListener('pc-shared-note-data-updated', event => {
+      const row = event && event.detail && event.detail.row;
+      if (!Array.isArray(row)) return;
+      const state = currentState();
+      applyState({ row, note: state.note, updatedAt: Date.now() });
+      setStatus('以前からの共有ノートを読み込みました。');
+    });
+
 
     const footnote = pane.querySelector('.clk-panel__footnote');
-    group.append(title, description, statusNode, errorNode, scheduleGrid, noteSection, actions, shareHelp, shareUrlField);
+    group.append(title, description, statusNode, errorNode, scheduleGrid, noteSection, actions, shareHelp, linkNote);
     pane.insertBefore(group, footnote || null);
-    if (!importedShare) setStatus('入力内容はこの端末に自動保存されます。共有する場合は共有リンクを作成してください。');
+    setStatus('以前からの共有ノートを読み込んでいます…');
 
     window.PC_SHARED_NOTE = {
       getState: currentState,
       save: persist,
-      createShareUrl: shareUrl,
+      sharedUrl: SHARED_NOTE_URL,
       announce
     };
   }
