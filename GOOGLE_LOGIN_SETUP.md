@@ -1,3 +1,5 @@
+> **このガイドは旧バージョン向けです。** 現在の共有ノート機能では、Googleログイン、Googleスプレッドシート、Googleドライブへのアクセス許可は不要です。下記のOAuth設定手順は共有ノートを使うためには実行しないでください。
+
 # Google Identity Services（GIS）ログイン・Googleスプレッドシート連携の初期設定
 
 このアプリはGitHub Pages上の静的サイトです。Google Identity Services（GIS）のOAuth認可を使い、ログイン時にGoogleアカウント情報、Googleスプレッドシートへのアクセス権限、およびこのアプリで使用する特定のGoogleドライブファイルへのアクセス権限（drive.file）をまとめて要求します。Googleの同意画面でユーザーが許可した場合に限り、連携を利用できます。
