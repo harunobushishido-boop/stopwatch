@@ -79,6 +79,24 @@
     });
   }
 
+  // Explicit manual test: always perform a fresh read from the preconfigured note.
+  // This is read-only and never creates, edits, or exports a note.
+  window.PC_SHARED_NOTE_READ_TEST = async function () {
+    try {
+      const rows = await readPublicSharedNote();
+      cachedRows = rows;
+      lastReadAt = Date.now();
+      reportSharedNoteStatus(true);
+      const filledRows = rows.filter(row =>
+        (row || []).some(cell => String(cell == null ? '' : cell).trim())
+      ).length;
+      return { rowCount: rows.length, filledRows, checkedAt: lastReadAt };
+    } catch (error) {
+      reportSharedNoteStatus(false);
+      throw error;
+    }
+  };
+
   async function readRows(force = false) {
     if (readInFlight) return cachedRows;
     if (!force && Date.now() - lastReadAt < 1000) return cachedRows;
