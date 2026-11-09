@@ -53,13 +53,14 @@
           finish(new Error(message || '共有ノートからデータを取得できませんでした。リンク共有設定を確認してください。'));
           return;
         }
-        const rows = (Array.isArray(response.table.rows) ? response.table.rows : []).map(row =>
+        let rows = (Array.isArray(response.table.rows) ? response.table.rows : []).map(row =>
           (Array.isArray(row.c) ? row.c : []).map(cell => {
             if (!cell) return '';
             const value = cell.f != null && cell.f !== '' ? cell.f : cell.v;
             return value == null ? '' : String(value);
           })
         );
+        if (rows.length && /授業時間数|区分（通常\/特別）/.test(String(rows[0][0] || '') + ' ' + String(rows[0][1] || ''))) rows = rows.slice(1);
         finish(null, rows);
       };
       script.onerror = () => finish(new Error('以前からの共有ノートに接続できません。ネットワークとリンク共有設定を確認してください。'));
@@ -535,7 +536,7 @@
       const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
-        setStatus('以前からの共有ノートを1秒ごとに確認しています。予定と持ち物を入力してください。');
+        setStatus('以前からの共有ノートを1秒ごとに確認しています。');
         return;
       }
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
@@ -684,10 +685,10 @@
     installStatus();
     if (timer) clearInterval(timer);
     checkAnnouncement();
-    // 共有ノートの端末内保存データを1秒ごとに確認する。
+    // 以前からの固定共有ノート（公開閲覧リンク）を1秒ごとに確認する。
     timer = setInterval(() => checkAnnouncement(true), 1000);
   }
-  window.addEventListener('pc-shared-note-updated', () => {
+  window.addEventListener('pc-shared-note-data-updated', () => {
     installStatus();
     lastReadAt = 0;
     checkAnnouncement(true);
