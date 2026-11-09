@@ -1,7 +1,5 @@
 (() => {
   'use strict';
-  const SCHEDULE_ROWS_KEY = 'pc-schedule-export-rows-v1';
-  const NOTE_STORAGE_KEY = 'pc-shared-note-v1';
   const ANNOUNCED_KEY = 'pc-schedule-announced-v1';
   const SHARED_NOTE_ID = '1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ';
   const SHARED_NOTE_GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHARED_NOTE_ID + '/gviz/tq';
@@ -24,6 +22,12 @@
     if (!statusNode) return;
     statusNode.textContent = message;
     statusNode.style.color = error ? '#b91c1c' : '';
+  };
+
+  const reportSharedNoteStatus = (ok) => {
+    window.dispatchEvent(new CustomEvent('pc-shared-note-status', {
+      detail: { ok: !!ok, checkedAt: Date.now() }
+    }));
   };
 
   function readPublicSharedNote() {
@@ -83,6 +87,7 @@
       const rows = await readPublicSharedNote();
       cachedRows = rows;
       lastReadAt = Date.now();
+      reportSharedNoteStatus(true);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (row) {
         window.dispatchEvent(new CustomEvent('pc-shared-note-data-updated', { detail: { row } }));
@@ -90,21 +95,9 @@
       return cachedRows;
     } catch (error) {
       lastReadAt = Date.now();
-      if (cachedRows.length) return cachedRows;
-      let localRow = null;
-      try {
-        const note = JSON.parse(localStorage.getItem(NOTE_STORAGE_KEY) || 'null');
-        if (note && Array.isArray(note.row)) localRow = note.row;
-      } catch (ignored) {}
-      if (!localRow) {
-        try {
-          const local = JSON.parse(localStorage.getItem(SCHEDULE_ROWS_KEY) || 'null');
-          if (Array.isArray(local)) localRow = Array.isArray(local[1]) ? local[1] : local[0];
-        } catch (ignored) {}
-      }
-      if (Array.isArray(localRow) && localRow.some(value => String(value == null ? '' : value).trim())) {
-        setStatus('以前の共有ノートを読み取れないため、この端末の保存内容を表示しています。共有ノートのリンク共有設定を確認してください。', true);
-        cachedRows = [localRow.map(value => String(value == null ? '' : value))];
+      reportSharedNoteStatus(false);
+      if (cachedRows.length) {
+        setStatus('共有ノートの接続を再確認しています。直近に読み取った内容を一時表示しています。', true);
         return cachedRows;
       }
       throw error;
@@ -588,7 +581,8 @@
         localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
       }
     } catch (error) {
-      setStatus('以前からの共有ノートを読み取れませんでした。リンク共有を「リンクを知っている全員が閲覧可」にしてください。', true);
+      reportSharedNoteStatus(false);
+      setStatus('設定済みの共有ノートに接続できません。公開閲覧設定とネットワークを確認してください。', true);
       console.error('Shared note announcement failed', error);
     } finally {
       announcementCheckInFlight = false;
@@ -601,12 +595,12 @@
     box.id = 'pcScheduleAnnouncementStatus';
     box.style.cssText = 'margin-top:12px;padding:10px;border:1px solid #15803d55;border-radius:10px;font-size:12px;line-height:1.65';
     const title = document.createElement('strong');
-    title.textContent = '共有ノートの自動音声発表';
+    title.textContent = '自動音声発表';
     statusNode = document.createElement('p');
     statusNode.style.cssText = 'margin:5px 0 0';
     const note = document.createElement('p');
     note.style.cssText = 'margin:5px 0 0;opacity:.75';
-    note.textContent = '共有ノートの「授業時間数」「明日の持ち物」「追加のお知らせ」を入力します。1〜4時間授業の発表時刻を入力してください。5時間は14:25、6時間は15:15に自動発表します。授業時間数は読み上げません。ページを開いたままにしてください。';
+    note.textContent = '設定済みの共有ノートを1秒ごとに確認し、登録された時刻に音声と大きな画面表示でお知らせします。5時間は14:25、6時間は15:15です。自動発表を使うときは、このページを開いたままにしてください。';
     const apiHelp = document.createElement('p');
     apiHelp.style.cssText = 'margin:10px 0 0;font-size:12px;line-height:1.6';
     apiHelp.textContent = '高速APIキーを設定すると、音声発表時に高速APIを優先します。キー未設定・無効・ポイント不足・タイムアウト時は、APIキー不要の低速APIへ切り替えます。高速APIは利用ポイントを消費します。声は四国めたん（ノーマル）です。';
@@ -688,11 +682,6 @@
     // 以前からの固定共有ノート（公開閲覧リンク）を1秒ごとに確認する。
     timer = setInterval(() => checkAnnouncement(true), 1000);
   }
-  window.addEventListener('pc-shared-note-data-updated', () => {
-    installStatus();
-    lastReadAt = 0;
-    checkAnnouncement(true);
-  });
   window.addEventListener('focus', () => {
     lastReadAt = 0;
     checkAnnouncement(true);
