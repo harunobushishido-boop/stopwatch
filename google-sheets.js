@@ -251,6 +251,8 @@
     const message = typeof makeText === 'function'
       ? makeText(saved.state.row)
       : '明日の持ち物は、' + items.replace(/[。．.!！?？]+$/, '') + 'です。';
+    const showDisplay = window.PC_SCHEDULE_SHOW_ANNOUNCEMENT;
+    if (typeof showDisplay === 'function') showDisplay(message, saved.state.row);
     setError('');
     setStatus('共有ノートの内容を音声で発表しています…');
     speak(message).then(played => {
