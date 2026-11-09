@@ -20,10 +20,10 @@
       return;
     }
 
-    statusNode.textContent = '設定済み・接続確認中';
+    statusNode.textContent = '設定済み';
     statusNode.style.color = '#b45309';
     if (detailNode) {
-      detailNode.textContent = '共有ノートの読み取りを確認できません。元の共有ノートの公開閲覧設定とネットワークを確認してください。';
+      detailNode.textContent = '登録済みの共有ノートに接続できていません。元の共有ノートの公開閲覧設定とネットワークを確認してください。';
     }
   }
 
