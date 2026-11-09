@@ -150,7 +150,7 @@
   }
 
   function decodeState(token) {
-    if (!token || token.length > 120000) throw new Error('共有リンクのデータが大きすぎるか、空です。');
+    if (!token || token.length > 250000) throw new Error('共有リンクのデータが大きすぎるか、空です。');
     const normalized = token.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized + '='.repeat((4 - normalized.length % 4) % 4);
     const binary = atob(padded);
@@ -270,6 +270,7 @@
   }
 
   function installUI() {
+    document.getElementById('pcSheetsLoadingNotice')?.remove();
     const panes = Array.from(document.querySelectorAll('.clk-panel__pane'));
     pane = document.getElementById('pcSheetsSettingsPane') ||
       panes.find(item => item.querySelector('[aria-label="フォントの太さ"]')) || panes[5];
