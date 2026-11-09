@@ -70,6 +70,64 @@
     const footnote = pane.querySelector('.clk-panel__footnote');
     pane.insertBefore(group, footnote || null);
 
+    // Keep the configured-note indicator itself status-only; place the read test
+    // in a separate panel and perform a real read against the original note.
+    const testGroup = document.createElement('section');
+    testGroup.id = 'pcSharedNoteReadTestGroup';
+    testGroup.className = 'clk-group';
+    testGroup.style.cssText = 'padding:14px;border:1px solid var(--clk-border,rgba(127,127,127,.3));border-radius:14px;margin-top:12px;min-width:0';
+
+    const testTitle = document.createElement('div');
+    testTitle.className = 'clk-group__label';
+    testTitle.textContent = 'ステップ1：共有ノート読み取りテスト';
+
+    const testDescription = document.createElement('p');
+    testDescription.className = 'clk-group__hint';
+    testDescription.style.cssText = 'margin:7px 0 0;line-height:1.6';
+    testDescription.textContent = '設定済みの共有ノートへ実際に接続し、読み取れるかを確認します。内容の変更・保存は行いません。';
+
+    const testButton = document.createElement('button');
+    testButton.id = 'pcSharedNoteReadTestButton';
+    testButton.type = 'button';
+    testButton.textContent = '読み取りテストを実行';
+    testButton.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;margin-top:10px;padding:8px 13px;border:1px solid #2563eb;border-radius:9px;background:#2563eb;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer';
+
+    const testResult = document.createElement('p');
+    testResult.id = 'pcSharedNoteReadTestResult';
+    testResult.setAttribute('role', 'status');
+    testResult.setAttribute('aria-live', 'polite');
+    testResult.style.cssText = 'margin:7px 0 0;font-size:12px;line-height:1.6;opacity:.85';
+    testResult.textContent = 'まだテストしていません。';
+
+    testButton.addEventListener('click', async () => {
+      const readTest = window.PC_SHARED_NOTE_READ_TEST;
+      if (typeof readTest !== 'function') {
+        testResult.textContent = '読み取り機能の準備ができていません。ページを再読み込みしてお試しください。';
+        return;
+      }
+      testButton.disabled = true;
+      testButton.textContent = '読み取り確認中…';
+      testResult.textContent = '以前から設定されている共有ノートへ接続しています…';
+      try {
+        const result = await readTest();
+        const rowCount = Number(result && result.rowCount) || 0;
+        const filledRows = Number(result && result.filledRows) || 0;
+        testResult.textContent = rowCount
+          ? '成功：共有ノートから' + rowCount + '行を読み取りました（入力済み' + filledRows + '行）。'
+          : '接続成功：共有ノートを読み取れました。現在、読み取れるデータ行はありません。';
+      } catch (error) {
+        testResult.textContent = '失敗：共有ノートを読み取れませんでした。' +
+          String(error && error.message || error) +
+          ' 公開閲覧設定とネットワークを確認してください。';
+      } finally {
+        testButton.disabled = false;
+        testButton.textContent = 'もう一度読み取りテスト';
+      }
+    });
+
+    testGroup.append(testTitle, testDescription, testButton, testResult);
+    pane.insertBefore(testGroup, footnote || null);
+
     window.addEventListener('pc-shared-note-status', event => {
       updateStatus(event && event.detail);
     });
