@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'benri-timer-v134';
+const CACHE_NAME = 'benri-timer-v135';
 const CACHE_PREFIX = 'benri-timer-';
 const APP_SHELL = [
   './',
@@ -9,10 +9,9 @@ const APP_SHELL = [
   './terms.html',
   './weather-fallback.js?v=127',
   './feature-fixes.js?v=4',
-  './google-login-config.js?v=118',
-  './google-auth.js?v=118',
-  './google-sheets.js?v=121',
-  './schedule-announcement.js?v=118',
+  './google-auth.js?v=119',
+  './google-sheets.js?v=122',
+  './schedule-announcement.js?v=119',
   './schedule-voice-test.js?v=118',
   './manifest.webmanifest',
   './icon-192.png',
@@ -65,6 +64,23 @@ self.addEventListener('fetch', function (event) {
 
   const indexUrl = new URL('./index.html', self.location.href).href;
   const isWeatherScript = /\/weather-fallback\.js$/i.test(url.pathname);
+  const isSharedNoteScript = /\/(google-auth|google-sheets|schedule-announcement)\.js$/i.test(url.pathname);
+
+  if (isSharedNoteScript) {
+    event.respondWith((async function () {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        // Always bypass the browser HTTP cache for updated app scripts.
+        const response = await fetch(request, { cache: 'no-store' });
+        if (response.ok) cache.put(request, response.clone()).catch(function () {});
+        return response;
+      } catch (error) {
+        return (await cache.match(request)) || Response.error();
+      }
+    })());
+    return;
+  }
+
 
   if (request.mode === 'navigate') {
     event.respondWith((async function () {
