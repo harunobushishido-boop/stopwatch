@@ -3,10 +3,13 @@
   const SCHEDULE_ROWS_KEY = 'pc-schedule-export-rows-v1';
   const NOTE_STORAGE_KEY = 'pc-shared-note-v1';
   const ANNOUNCED_KEY = 'pc-schedule-announced-v1';
+  const SHARED_NOTE_ID = '1-NqPh0uK2b00Q16ipvkRgkZEOTNNN53CBKn8_kwXsPQ';
+  const SHARED_NOTE_GVIZ_URL = 'https://docs.google.com/spreadsheets/d/' + SHARED_NOTE_ID + '/gviz/tq';
   const VOICEVOX_LOCAL_BASE = 'http://127.0.0.1:50021';
   let lastReadAt = 0;
   let cachedRows = [];
   let readInFlight = false;
+  let jsonpSequence = 0;
   let statusNode = null;
   let timer = null;
   let announcementCheckInFlight = false;
@@ -23,25 +26,87 @@
     statusNode.style.color = error ? '#b91c1c' : '';
   };
 
+  function readPublicSharedNote() {
+    return new Promise((resolve, reject) => {
+      const callbackName = '__pcSharedNoteResponse_' + Date.now() + '_' + (++jsonpSequence);
+      const script = document.createElement('script');
+      let settled = false;
+      const cleanup = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        script.remove();
+        try { delete window[callbackName]; } catch (error) { window[callbackName] = undefined; }
+      };
+      const finish = (error, rows) => {
+        cleanup();
+        if (error) reject(error);
+        else resolve(rows);
+      };
+      const timeoutId = setTimeout(() => {
+        finish(new Error('共有ノートを読み取れません。元の共有ノートで「リンクを知っている全員が閲覧可」になっているか確認してください。'));
+      }, 8000);
+
+      window[callbackName] = response => {
+        if (!response || response.status !== 'ok' || !response.table) {
+          const message = response && response.errors && response.errors[0] && response.errors[0].detailed_message;
+          finish(new Error(message || '共有ノートからデータを取得できませんでした。リンク共有設定を確認してください。'));
+          return;
+        }
+        const rows = (Array.isArray(response.table.rows) ? response.table.rows : []).map(row =>
+          (Array.isArray(row.c) ? row.c : []).map(cell => {
+            if (!cell) return '';
+            const value = cell.f != null && cell.f !== '' ? cell.f : cell.v;
+            return value == null ? '' : String(value);
+          })
+        );
+        finish(null, rows);
+      };
+      script.onerror = () => finish(new Error('以前からの共有ノートに接続できません。ネットワークとリンク共有設定を確認してください。'));
+
+      const params = new URLSearchParams();
+      params.set('sheet', '予定');
+      params.set('range', 'A1:F2');
+      params.set('tqx', 'out:json;responseHandler:' + callbackName + ';reqId:0');
+      script.async = true;
+      script.src = SHARED_NOTE_GVIZ_URL + '?' + params.toString();
+      document.head.appendChild(script);
+    });
+  }
+
   async function readRows(force = false) {
     if (readInFlight) return cachedRows;
     if (!force && Date.now() - lastReadAt < 1000) return cachedRows;
     readInFlight = true;
     try {
-      let row = null;
+      const rows = await readPublicSharedNote();
+      cachedRows = rows;
+      lastReadAt = Date.now();
+      const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
+      if (row) {
+        window.dispatchEvent(new CustomEvent('pc-shared-note-data-updated', { detail: { row } }));
+      }
+      return cachedRows;
+    } catch (error) {
+      lastReadAt = Date.now();
+      if (cachedRows.length) return cachedRows;
+      let localRow = null;
       try {
         const note = JSON.parse(localStorage.getItem(NOTE_STORAGE_KEY) || 'null');
-        if (note && Array.isArray(note.row)) row = note.row;
-      } catch (error) {}
-      if (!row) {
+        if (note && Array.isArray(note.row)) localRow = note.row;
+      } catch (ignored) {}
+      if (!localRow) {
         try {
-          const cached = JSON.parse(localStorage.getItem(SCHEDULE_ROWS_KEY) || 'null');
-          if (Array.isArray(cached)) row = Array.isArray(cached[1]) ? cached[1] : cached[0];
-        } catch (error) {}
+          const local = JSON.parse(localStorage.getItem(SCHEDULE_ROWS_KEY) || 'null');
+          if (Array.isArray(local)) localRow = Array.isArray(local[1]) ? local[1] : local[0];
+        } catch (ignored) {}
       }
-      cachedRows = Array.isArray(row) ? [row.map(value => String(value == null ? '' : value))] : [];
-      lastReadAt = Date.now();
-      return cachedRows;
+      if (Array.isArray(localRow) && localRow.some(value => String(value == null ? '' : value).trim())) {
+        setStatus('以前の共有ノートを読み取れないため、この端末の保存内容を表示しています。共有ノートのリンク共有設定を確認してください。', true);
+        cachedRows = [localRow.map(value => String(value == null ? '' : value))];
+        return cachedRows;
+      }
+      throw error;
     } finally {
       readInFlight = false;
     }
@@ -470,7 +535,7 @@
       const rows = await readRows(forceRefresh);
       const row = rows.find(value => (value || []).some(cell => String(cell == null ? '' : cell).trim()));
       if (!row) {
-        setStatus('共有ノートに予定と持ち物を入力すると、自動音声発表を利用できます。');
+        setStatus('以前からの共有ノートを1秒ごとに確認しています。予定と持ち物を入力してください。');
         return;
       }
       const classes = Number(String(row[0] == null ? '' : row[0]).replace(/[^0-9]/g, ''));
@@ -522,7 +587,7 @@
         localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
       }
     } catch (error) {
-      setStatus('共有ノートの予定を読み取れませんでした。ブラウザーの保存領域を確認してください。', true);
+      setStatus('以前からの共有ノートを読み取れませんでした。リンク共有を「リンクを知っている全員が閲覧可」にしてください。', true);
       console.error('Shared note announcement failed', error);
     } finally {
       announcementCheckInFlight = false;
