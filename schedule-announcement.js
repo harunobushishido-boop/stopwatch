@@ -673,7 +673,7 @@
     keyActions.append(saveKeyButton, clearKeyButton);
     keyLabel.appendChild(keyInput);
     box.append(title, statusNode, note, apiHelp, apiLink, document.createTextNode(' '), keyLink, keyLabel, keyActions, keyStatus);
-    host.appendChild(box);
+    host.parentNode.insertBefore(box, host.nextSibling);
   }
   function start() {
     installStatus();
