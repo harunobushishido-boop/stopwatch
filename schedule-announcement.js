@@ -371,6 +371,97 @@
       return false;
     }
   }
+  function showAnnouncementDisplay(text, row) {
+    const previous = document.getElementById('pcScheduleAnnouncementDisplay');
+    if (previous) previous.remove();
+
+    const source = Array.isArray(row) ? row : [];
+    const overlay = document.createElement('div');
+    overlay.id = 'pcScheduleAnnouncementDisplay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'pcScheduleAnnouncementTitle');
+    overlay.setAttribute('aria-live', 'assertive');
+    overlay.style.cssText = [
+      'position:fixed',
+      'inset:0',
+      'z-index:2147483647',
+      'display:flex',
+      'align-items:center',
+      'justify-content:center',
+      'padding:clamp(12px,3vw,36px)',
+      'box-sizing:border-box',
+      'background:rgba(8,15,28,.94)',
+      'color:#fff',
+      'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'overflow-y:auto'
+    ].join(';');
+
+    const panel = document.createElement('section');
+    panel.style.cssText = [
+      'box-sizing:border-box',
+      'width:min(1100px,100%)',
+      'max-height:100%',
+      'overflow-y:auto',
+      'padding:clamp(20px,5vw,64px)',
+      'border:2px solid rgba(255,255,255,.3)',
+      'border-radius:28px',
+      'background:linear-gradient(145deg,#172554,#0f172a)',
+      'box-shadow:0 24px 90px rgba(0,0,0,.45)',
+      'text-align:center'
+    ].join(';');
+
+    const badge = document.createElement('div');
+    badge.textContent = '自動お知らせ';
+    badge.style.cssText = 'display:inline-block;padding:8px 18px;border:1px solid rgba(255,255,255,.45);border-radius:999px;font-size:clamp(14px,2vw,20px);font-weight:700;letter-spacing:.08em';
+
+    const heading = document.createElement('h1');
+    heading.id = 'pcScheduleAnnouncementTitle';
+    heading.textContent = '明日の持ち物';
+    heading.style.cssText = 'margin:22px 0 10px;font-size:clamp(32px,6vw,68px);line-height:1.15;font-weight:800;letter-spacing:.03em';
+
+    const itemText = document.createElement('div');
+    itemText.textContent = String(source[3] || '').trim() || String(text || '');
+    itemText.style.cssText = 'margin:14px auto 0;max-width:1000px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:clamp(30px,6.4vw,76px);line-height:1.35;font-weight:800';
+
+    panel.append(badge, heading, itemText);
+
+    const special = String(source[2] || '').trim();
+    if (special) {
+      const specialNode = document.createElement('p');
+      specialNode.textContent = special;
+      specialNode.style.cssText = 'margin:26px 0 0;font-size:clamp(20px,3.4vw,38px);line-height:1.5;font-weight:650;white-space:pre-wrap;overflow-wrap:anywhere';
+      panel.appendChild(specialNode);
+    }
+
+    const extra = String(source[4] || '').trim();
+    if (extra) {
+      const extraNode = document.createElement('p');
+      extraNode.textContent = extra;
+      extraNode.style.cssText = 'margin:18px 0 0;font-size:clamp(18px,2.8vw,30px);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere';
+      panel.appendChild(extraNode);
+    }
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '表示を閉じる';
+    close.style.cssText = 'margin-top:clamp(24px,4vw,42px);padding:13px 28px;border:2px solid #fff;border-radius:14px;background:#fff;color:#172554;font:inherit;font-size:clamp(17px,2.4vw,24px);font-weight:800;cursor:pointer';
+    const dismiss = () => {
+      overlay.remove();
+      document.removeEventListener('keydown', onKeyDown);
+    };
+    const onKeyDown = event => {
+      if (event.key === 'Escape') dismiss();
+    };
+    close.addEventListener('click', dismiss);
+    document.addEventListener('keydown', onKeyDown);
+    panel.appendChild(close);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    close.focus({ preventScroll: true });
+  }
+  window.PC_SCHEDULE_SHOW_ANNOUNCEMENT = showAnnouncementDisplay;
+
   window.PC_SCHEDULE_SPEAK = speak;
   async function checkAnnouncement(forceRefresh = false) {
     if (announcementCheckInFlight) return;
@@ -423,7 +514,9 @@
         setStatus(classes + '時間授業の発表は本日分を実行済みです。');
         return;
       }
-      const played = await speak(announcementText(row));
+      const message = announcementText(row);
+      showAnnouncementDisplay(message, row);
+      const played = await speak(message);
       if (played) {
         announced[key] = true;
         localStorage.setItem(ANNOUNCED_KEY, JSON.stringify(announced));
@@ -526,8 +619,8 @@
     installStatus();
     if (timer) clearInterval(timer);
     checkAnnouncement();
-    // 共有ノートの端末内保存データを5秒ごとに確認する。
-    timer = setInterval(() => checkAnnouncement(true), 5000);
+    // 共有ノートの端末内保存データを1秒ごとに確認する。
+    timer = setInterval(() => checkAnnouncement(true), 1000);
   }
   window.addEventListener('pc-shared-note-updated', () => {
     installStatus();
