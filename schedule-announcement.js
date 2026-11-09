@@ -152,6 +152,23 @@
   }
   window.PC_SCHEDULE_ANNOUNCEMENT_TEXT = announcementText;
 
+  // Used by the manual voice test: fetch the current spreadsheet values freshly,
+  // then build exactly the same announcement text as the scheduled announcement.
+  // No completion flag is written, so testing never marks today's announcement done.
+  window.PC_SHARED_NOTE_ANNOUNCEMENT_TEST = async function () {
+    const rows = await readPublicSharedNote();
+    cachedRows = rows;
+    lastReadAt = Date.now();
+    reportSharedNoteStatus(true);
+    const row = rows.find(value =>
+      (value || []).some(cell => String(cell == null ? '' : cell).trim())
+    );
+    if (!row) throw new Error('共有ノートに発表対象の情報がありません。先にスプレッドシートへ情報を入力してください。');
+    const message = announcementText(row);
+    window.dispatchEvent(new CustomEvent('pc-shared-note-data-updated', { detail: { row } }));
+    return { row, message, checkedAt: lastReadAt };
+  };
+
   function targetTimeForClasses(classes, row) {
     if (classes === 5) return '14:25';
     if (classes === 6) return '15:15';
