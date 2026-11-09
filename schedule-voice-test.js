@@ -8,7 +8,7 @@
     const button = document.createElement('button');
     button.id = BUTTON_ID;
     button.type = 'button';
-    button.textContent = '音声テスト';
+    button.textContent = 'ステップ2：音声読み上げテスト';
     button.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;margin-top:9px;padding:8px 13px;border:1px solid #15803d;border-radius:9px;background:#15803d;color:#fff;font:inherit;font-size:13px;font-weight:700;cursor:pointer';
     const message = document.createElement('p');
     message.style.cssText = 'margin:6px 0 0;font-size:12px;opacity:.8';
@@ -20,19 +20,20 @@
         return;
       }
       button.disabled = true;
-      button.textContent = '再生中…';
+      button.textContent = '読み上げ中…';
       message.textContent = '保存済み高速APIキーがあれば高速APIを優先し、失敗時は低速APIへ切り替えます…';
       try {
-        await speak(TEXT);
+        const played = await speak(TEXT);
+        if (played === false) throw new Error('音声を再生できませんでした。音量とAPI接続を確認してください。');
         const status = document.getElementById('pcScheduleAnnouncementStatus');
         const detail = status ? status.innerText.replace(/^明日の持ち物の自動音声発表\s*/, '').trim() : '';
-        message.textContent = '音声テストが終わりました。' + (detail ? ' ' + detail : '');
+        message.textContent = '成功：音声の再生が完了しました。' + (detail ? ' ' + detail : '');
       } catch (error) {
-        message.textContent = '音声を再生できませんでした。API接続と音量を確認してください。';
+        message.textContent = '失敗：' + String(error && error.message || error) + ' API接続と音量を確認してください。';
         console.error('Schedule voice test failed', error);
       } finally {
         button.disabled = false;
-        button.textContent = 'もう一度テスト';
+        button.textContent = 'もう一度読み上げテスト';
       }
     });
     host.append(button, message);
